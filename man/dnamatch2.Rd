@@ -8,11 +8,15 @@ dnamatch2(evidfold, freqfile, reffold = NULL, sameCID = FALSE,
   betweensamples = TRUE, Thist = Inf, threshMAC = 0.75,
   threshLR = c(10, 100), threshHeight = 200, threshStutt = 0.1,
   threshMaj = 0.6, minLocStain = 3, minLocMaj = 3, pC = 0.05,
-  lambda = 0.01, kit = "ESX17", minFreq = 0.001,
+  lambda = 0.01, kit = NULL, minFreq = 0.001,
   searchtime = Sys.time(), SIDvec = NULL, BIDvec = NULL,
-  CIDvec = NULL, timediff = NULL, BIDptrn = NULL, SIDptrn = NULL,
-  printHistPlots = FALSE, writeScores = FALSE, maxK = c(4, 3),
-  matchfile = "matchfile.csv", sessionfold = "sessions")
+  CIDvec = NULL, timediff = NULL, IDsep = "_", BIDptrn = NULL,
+  SIDptrn = NULL, printHistPlots = FALSE, writeScores = FALSE,
+  maxK = c(4, 3), matchfile = "matchfile.csv",
+  sessionfold = "sessions", searchoption = 3, nDone = 4,
+  ignoreEmptyLoci = TRUE, searchSubFoldersEvid = FALSE,
+  searchSubFoldersRef = FALSE, importEvidFile = NULL,
+  importRefFile = NULL)
 }
 \arguments{
 \item{evidfold}{A folder with stain files (possible a vector). Full directory must be given.}
@@ -45,7 +49,7 @@ dnamatch2(evidfold, freqfile, reffold = NULL, sameCID = FALSE,
 
 \item{lambda}{Assumed hyperparameter lambda for peak height drop-in model (parameter in quantiative model).}
 
-\item{kit}{The shortname of the kit used for the samples. This allows for taking into account degradation. Use getKit function in euroformix R-package.}
+\item{kit}{The shortname of the kit used for the samples (default is no kit specified). This will use the euroformix degradation model on the evidence samples. NB: Don't use if evidence profiles are run with several kits!}
 
 \item{minFreq}{Minimum frequency for rare alleles. Used to assign new allele frequenceis. Default is 0.001.}
 
@@ -59,9 +63,11 @@ dnamatch2(evidfold, freqfile, reffold = NULL, sameCID = FALSE,
 
 \item{timediff}{Timedifference (in days) allowed between matching reference and target. Default is NULL (not used).}
 
-\item{BIDptrn}{Filename structure of stain files to evaluate. For instance BIDptrn="TA-".}
+\item{IDsep}{Seperator sign between SID,RID,CID in SampleName. Default is "_", giving SampleName structure SID_RID_CID.}
 
-\item{SIDptrn}{Pattern of name which is sample ID (SID_RID_CID)=("-S0001_BES00001-14_2014234231"). Here SIDptrn="-S" and SID="0001". Can also be a vector.}
+\item{BIDptrn}{Filename structure of stain files to search. For instance BIDptrn="TA-".}
+
+\item{SIDptrn}{Pattern of name of which sample ID should be searched Example: (SID_RID_CID)=("01-S0001_BES00001-14_2014234231"). Here SIDptrn="-S" means that only SID with -S should be searched. Can be a vector.}
 
 \item{printHistPlots}{Boolean of showing plots of the scores (number of matching alleles or LRs) for each comparisons.}
 
@@ -72,6 +78,20 @@ dnamatch2(evidfold, freqfile, reffold = NULL, sameCID = FALSE,
 \item{matchfile}{The name of the matchfile where multiple searches are stored in one place. Default is "matchfile.csv".}
 
 \item{sessionfold}{The name of the folder with run sessions. Default is "sessions".}
+
+\item{searchoption}{Selected search module to carry out search (1=MAC, 2=MAC+QUAL, 3=MAC+QUAL+QUAN)}
+
+\item{nDone}{Number of required optimizations for euroformix model (contLikMLE)}
+
+\item{ignoreEmptyLoci}{Whether empty loci should be ignored in calculation. NB: This should only be FALSE if all evidence profiles contains all markers as specified in population frequency data (i.e. all evid profiles contains the same markers)}
+
+\item{searchSubFoldersEvid}{Whether to extract files from subfolders for evidence profiles}
+
+\item{searchSubFoldersRef}{Whether to extract files from subfolders for reference profiles}
+
+\item{importEvidFile}{A file name including a function for reading evidence files (function euroformix::tableReader used if NULL)}
+
+\item{importRefFile}{A file name including a function for reading reference files (function euroformix::tableReader used if NULL)}
 }
 \description{
 dnamatch2 is a function for doing large scale DNA database search between trace samples (also mixture profiles) and between trace samples and reference samples.
@@ -85,7 +105,7 @@ It is optional whether between trace samples matches should be considered (boole
 
 Encoding idea: References coded with primenumbers, stains alleles/heights coded with original values but collapsed(/) strings per marker. 
 
-Note 1: Trace samples must have this format: "SID_RID_CID", seperated by underscores. The trace name must be unique and consist of SID=Sample ID, RID=Unique together with SID  for all traces, CID=Case ID. Hence the IDs must not contain underscores themselves. 
+Note 1: Trace samples must have this structured format: "SID_RID_CID", seperated by underscores (the separator can be changed with argument IDsep). The trace name must be unique and consist of SID=Sample ID, RID=Unique together with SID  for all traces, CID=Case ID. Hence the IDs must not contain underscores themselves. 
 Note 2: The names of the files containing trace samples must start with pattern specified by variable BIDptrn (BatchID pattern). The variable SIDptrn is required to recognize specific sample type (i.e. it can be used as a filter).  
 Note 3: Marker names of Amelogen must contain the name "AM" (not case-sensitive).
 

@@ -6,10 +6,8 @@
 #' @export
 
 #envirfile=NULL
-#source("K:\\Sensitivt\\Klinikk04\\RESP_sikker\\Beregningsverktøy\\dnamatch2\\dnamatch2_2.0.0\\gui.R")
 
 gui= function(envirfile=NULL) {
- require(dnamatch2)
  #size of main window
  mwH <- 800
  mwW <- 1000
@@ -33,6 +31,10 @@ gui= function(envirfile=NULL) {
  shortspace = "                          "
  timestamp = "%y-%m-%d-%H-%M-%S" #Format of time stamp (YEAR-MONTH-DAY-HOUR-MONTH-SECOND)
 
+ #GLOBAL VARIABLE NAMES USED TO STORE SETUP:
+ GLOBAL_vars = c("freqfile","workdir","IDsep","sameCID","betweensamples","Thist","timediff","searchtime","threshMAC","threshLRqual","threshLRquan","threshHeight","threshStutt","threshMaj","minLocStain","minLocMaj","pC","lambda","kit","minFreq","printHistPlots","writeScores","maxKqual","maxKquan","matchfile","sessionfold","printGraph","searchoption","nDone","ignoreEmptyLoci","searchSubFoldersEvid","searchSubFoldersRef","fileReaderEvid","fileReaderRef")
+ GLOBAL_vart = c("s","s","s","b","b","d","d","s","d","d","d","d","d","d","i","i","d","d","s","d","b","b","i","i","s","s","b","i","i","b","b","b","s","s") #variable types (s=string,b=boolean,d=double,i=integer)
+ 
  ###############
  #HELPFUNCTIONS#
  ###############
@@ -102,26 +104,34 @@ gui= function(envirfile=NULL) {
    assign(envirvar,as.list(folds),envir=mmTK) #Store setup values
   }
 
-  #Helpfunction to store/load values in optList to file
+  #Helpfunction to store/load values in optList to file (nb: must be in correct order!)
   saveSetup = function(opt) { 
-   write(unlist(opt),file=setupFile)
+    optSave = list()
+    for(var in GLOBAL_vars) {
+      optSave[[var]] = opt[[var]] #copy variable
+    }
+    write(unlist(optSave),file=setupFile) #save in correct order
   }
+  
   openSetup = function() { 
    #vars = names(optL)
-   vars = c("freqfile","workdir","IDsep","sameCID","betweensamples","Thist","timediff","searchtime","threshMAC","threshLRqual","threshLRquan","threshHeight","threshStutt","threshMaj","minLocStain","minLocMaj","pC","lambda","kit","minFreq","printHistPlots","writeScores","maxKqual","maxKquan","matchfile","sessionfold","printGraph")
-   vart = c("s","s","s","b","b","d","d","s","d","d","d","d","d","d","i","i","d","d","s","d","b","b","i","i","s","s","b") #variable types (s=string,b=boolean,d=double,i=integer)
-   dat = scan(file=setupFile,what=character(),quiet=TRUE,sep="\n")
+   #dat = scan(file=setupFile,what=character(),quiet=TRUE,sep="\n")
+   dat = readLines(setupFile)
+   if(length(dat)!=length(GLOBAL_vars)) {
+     gWidgets::gmessage(message="Something was wrong with the config setting file. Please contact developer for advice!",title="Corrupt config file",icon="error")
+     stop("Non-compatible config file")     
+   }
    opt = list() #init list
-   for(i in 1:length(vars)) { #
+   for(i in 1:length(GLOBAL_vars)) { #
       x = dat[i] #string is standard
-      if(vart[i]=="b") {
+      if(GLOBAL_vart[i]=="b") {
         x = as.logical(x)
-      } else if(vart[i]=="d") {
+      } else if(GLOBAL_vart[i]=="d") {
 	   x = as.numeric(x)
-      } else if(vart[i]=="i") {
+      } else if(GLOBAL_vart[i]=="i") {
 	   x = as.integer(x)
       }
-      opt[[vars[i]]] = x  #insert correct type of variable for each list element
+      opt[[GLOBAL_vars[i]]] = x  #insert correct type of variable for each list element
    }
    return(opt)
   }
@@ -197,40 +207,56 @@ gui= function(envirfile=NULL) {
 
      #prechecks:
 	if(opt$freqfile==emptyName)  errorMessage("The freqency file has not been specified.\nPlease select one!") 
-     kitUse=opt$kit #get kit
-     if(kitUse==emptyName) kitUse = NULL #Set back to NULL if none specified
+  kitUse=opt$kit #get kit
+  if(kitUse==emptyName) kitUse = NULL #Set back to NULL if none specified
 
+  if(opt$ignoreEmptyLoci) {
+    bool = gWidgets::gconfirm("The option 'Ignore empty markers' should only be used if some of the evidence profiles contains different markers (i.e. run with different kits). Do you want to continue?")
+    if(!bool) return() #don't search if user not agreeing
+  }
+  
+  importEvidFile <- importRefFile <- NULL
+  if(opt$fileReaderEvid!=emptyName) importEvidFile = opt$fileReaderEvid #set name of file
+  if(opt$fileReaderRef!=emptyName) importRefFile =opt$fileReaderRef #set name of file
+  
   status <- dnamatch2(
-	evidfold=evidList, 
-     freqfile=opt$freqfile, 
-	reffold=refList, 
-	sameCID=opt$sameCID,
-	betweensamples=opt$betweensamples, 
-	Thist=opt$Thist, 
-	threshMAC=opt$threshMAC, 
-	threshLR=c(opt$threshLRqual,opt$threshLRquan), 
-	threshHeight=opt$threshHeight,
-	threshStutt=opt$threshStutt, 
-	threshMaj=opt$threshMaj, 
-	minLocStain=opt$minLocStain,
-	minLocMaj=opt$minLocMaj, 
-	pC=opt$pC, 
-	lambda=opt$lambda,
-	kit=kitUse,
-	minFreq=opt$minFreq, 
-	searchtime=as.POSIXct(opt$searchtime,format=timestamp), # Sys.time(). Searchtime specified by timestamp!
-	SIDvec=SIDselList,
-	BIDvec=BIDselList,
-	CIDvec=CIDselList,
-	timediff=opt$timediff,
-	IDsep = opt$IDsep,
-	BIDptrn=BIDpatList,
-	SIDptrn=SIDpatList,
-	printHistPlots=opt$printHistPlots,
-	writeScores=opt$writeScores,
-	maxK=c(opt$maxKqual,opt$maxKquan),
-	matchfile=opt$matchfile,
-	sessionfold=opt$sessionfold
+  	evidfold=evidList, 
+    freqfile=opt$freqfile, 
+  	reffold=refList, 
+  	sameCID=opt$sameCID,
+  	betweensamples=opt$betweensamples, 
+  	Thist=opt$Thist, 
+  	threshMAC=opt$threshMAC, 
+  	threshLR=c(opt$threshLRqual,opt$threshLRquan), 
+  	threshHeight=opt$threshHeight,
+  	threshStutt=opt$threshStutt, 
+  	threshMaj=opt$threshMaj, 
+  	minLocStain=opt$minLocStain,
+  	minLocMaj=opt$minLocMaj, 
+  	pC=opt$pC, 
+  	lambda=opt$lambda,
+  	kit=kitUse,
+  	minFreq=opt$minFreq, 
+  	searchtime=as.POSIXct(opt$searchtime,format=timestamp), # Sys.time(). Searchtime specified by timestamp!
+  	SIDvec=SIDselList,
+  	BIDvec=BIDselList,
+  	CIDvec=CIDselList,
+  	timediff=opt$timediff,
+  	IDsep = opt$IDsep,
+  	BIDptrn=BIDpatList,
+  	SIDptrn=SIDpatList,
+  	printHistPlots=opt$printHistPlots,
+  	writeScores=opt$writeScores,
+  	maxK=c(opt$maxKqual,opt$maxKquan),
+  	matchfile=opt$matchfile,
+  	sessionfold=opt$sessionfold,
+  	searchoption = opt$searchoption,
+  	nDone = opt$nDone,
+  	ignoreEmptyLoci = opt$ignoreEmptyLoci,
+  	searchSubFoldersEvid = opt$searchSubFoldersEvid,
+  	searchSubFoldersRef = opt$searchSubFoldersRef,
+  	importEvidFile = importEvidFile,
+  	importRefFile = importRefFile
    )
   
   if(!status) gWidgets::gmessage("Search completed:\nNo match candidates were found!")
@@ -241,11 +267,12 @@ gui= function(envirfile=NULL) {
 	fra <- tab$refID
 	til <- tab$tarID 
 	rem <- duplicated(cbind(fra,til)) #indices to remove
-	rels <- data.frame(from=fra[!rem],to=til[!rem],weight=sqrt(log10(as.numeric(tab$LRquan[!rem]))))
-	gg <- graph.data.frame(rels,directed=FALSE)
+	
+	rels <- data.frame(from=fra[!rem],to=til[!rem],weight=rep(1,sum(!rem))) #sqrt(log10(as.numeric(score[!rem]))))
+	gg <- igraph::graph.data.frame(rels,directed=FALSE)
 
      dev.new() #avoid overriding existing plots
-     plot(gg,edge.width=E(gg)$weight,vertex.color="white",vertex.size=10,vertex.label.color="black",vertex.label.cex=0.8)
+     plot(gg,edge.width=igraph::E(gg)$weight,vertex.color="white",vertex.size=10,vertex.label.color="black",vertex.label.cex=0.8)
      op <- par(no.readonly = TRUE)
      par(op)
    }
@@ -317,7 +344,7 @@ gui= function(envirfile=NULL) {
    #Search type:
    opt$sameCID = FALSE #Search within same Cases (CIDs)? 
    opt$betweensamples = TRUE #Search between samples? 
-
+   
    #Time windows: 
    opt$Thist = Inf #The number of days back in search time (using date of files)
    opt$timediff = Inf #required number of timedifference between match candidates (Can also be NULL by default)
@@ -340,7 +367,7 @@ gui= function(envirfile=NULL) {
    #Model settings (dropin/kit):
    opt$pC = 0.05
    opt$lambda = 0.01
-   opt$kit =  emptyName #Requires kitname (can be NULL also), use euroformix::getKit()
+   opt$kit = emptyName #Requires kitname (can be NULL also), use euroformix::getKit()
  
    #Small option settings:
    opt$minFreq = 0.001 #minimum frequency used
@@ -350,16 +377,33 @@ gui= function(envirfile=NULL) {
    opt$maxKquan=3 #max number of contributors under QUAN
    opt$matchfile="matchfile.csv" #file name for storing results
    opt$sessionfold ="session" #folder name for storing results
-
+   
    #GUI option settings:
    opt$printGraph = TRUE #Should a graph tree of matches in the matchfile be shown?
 
+   #Search strategy
+   opt$searchoption = 3 #default is searching all methods
+
+   #Added options v2.2.0:
+   opt$ignoreEmptyLoci = FALSE #Must be true in order to search evid profiles with different markers
+   opt$searchSubFoldersEvid = FALSE #whether to import files in sub-folders
+   opt$searchSubFoldersRef = FALSE #whether to import files in sub-folders
+   opt$nDone = 4 #number of required optimizations for quantitative model (EFM)
+   opt$fileReaderEvid = emptyName
+   opt$fileReaderRef = emptyName
+   
   } #end if file not found
   assign("setup",opt,envir=mmTK) #Store setup values 
  } else {
   load(envirfile) #loading environment
+   
+   optL = get("setup",envir=mmTK)  #receive settings from envir (preassigned or from file)
+   if( any( !GLOBAL_vars%in%names(optL) ) ) {
+     gWidgets::gmessage(message="The project save file was not compatible with this software version!",title="Wrong version",icon="error")
+     return()
+   }
+   
  }
- #optL = get("setup",envir=mmTK)  #receive settings from envir (preassigned or from file)
 
 ###################################################################
 ###########################GUI#####################################
@@ -368,8 +412,8 @@ gui= function(envirfile=NULL) {
  #Menu bar file-lists:
  f_setwd = function(h,...) {
   dirsel = gWidgets::gfile(text="Select folder",type="selectdir")
-  if(!is.na(dirfile)) {
-   setwd(dirfile)
+  if(!is.na(dirsel)) {
+   setwd(dirsel)
    opt = get("setup",envir=mmTK) #get
    opt$workdir = dirsel
    assign("setup",opt,envir=mmTK) #set
@@ -397,11 +441,11 @@ gui= function(envirfile=NULL) {
       fv = addFold(foldadd=dirfile,h$action) #Add folder to environment and file, h=list(action="EVID")
       if(h$action=="EVID") {
         tab2a[1,2][] = fv #update combolist
-        gWidgets::enabled(tab2a[2,2]) = TRUE
+        gWidgets::enabled(tab2a[2,1]) = TRUE
       }
       if(h$action=="REF") {
         tab2b[1,2][] = fv #update combolist
-        gWidgets::enabled(tab2b[2,2]) = TRUE
+        gWidgets::enabled(tab2b[2,1]) = TRUE
       }
     }
   }
@@ -445,7 +489,7 @@ gui= function(envirfile=NULL) {
         if(length(folds)==0) {
           tab2a[1,2][] = longspace #folds #update combolist
           gWidgets::svalue(tab2a[1,2]) = longspace 
-          gWidgets::enabled(tab2a[2,2]) = FALSE
+          gWidgets::enabled(tab2a[2,1]) = FALSE
         } else {
           gWidgets::svalue(tab2a[1,2]) = folds[1]
         }
@@ -458,7 +502,7 @@ gui= function(envirfile=NULL) {
         if(length(folds)==0) {
           tab2b[1,2][] = longspace #folds #update combolist
           gWidgets::svalue(tab2b[1,2]) = longspace 
-          gWidgets::enabled(tab2b[2,2]) = FALSE
+          gWidgets::enabled(tab2b[2,1]) = FALSE
         } else {
           gWidgets::svalue(tab2b[1,2]) = folds[1]
         }
@@ -557,7 +601,7 @@ gui= function(envirfile=NULL) {
  tabanalyse = gWidgets::ggroup(expand=TRUE,spacing=spc,container=nb,label="Analyse") #tab1: (select project and file storage)
  tabdata = gWidgets::ggroup(expand=TRUE,spacing=spc,container=nb,label="Data setup") #tab2: (select what data to search)
  tabsearch = gWidgets::ggroup(expand=TRUE,spacing=spc,container=nb,label="Search setup") #tab3: (select prefilter thresholds and model settings)
- tabpattern = gWidgets::ggroup(expand=TRUE,spacing=spc,container=nb,label="Pattern setup") #tab4: (User specified pattern setup)
+ tabpattern = gWidgets::ggroup(expand=TRUE,spacing=spc,container=nb,label="Other setup") #tab4: (User specified pattern setup)
 
  gWidgets::svalue(nb) <- 1 #initial start in first tab
 
@@ -583,7 +627,7 @@ gui= function(envirfile=NULL) {
 	function(h,...) { 
       fsel = gWidgets::gfile(text="Select directory",type="selectdir")
       if(!is.na(fsel)) {
-	  setwd(fsel) #actually set work directory
+	    setwd(fsel) #actually set work directory
        opt = get("setup",envir=mmTK) #get option vals
        opt$workdir = fsel
        assign("setup",opt,envir=mmTK) #set to envir again
@@ -630,23 +674,35 @@ gui= function(envirfile=NULL) {
 
   tab2 <- gWidgets::glayout(spacing=spc,container=tabdata ) 
 
-  tab2a = gWidgets::glayout(spacing=spc,container=(tab2[2,1] <-gWidgets::gframe("Selecting evidence folders",container=tab2))) 
-  tab2a[1,1] <- gWidgets::glabel("Selected folders:",container=tab2a)
-  tab2a[2,1] <- gWidgets::gbutton("Add a folder",container=tab2a,handler=f_addFolder,action="EVID")
-  tab2a[2,2] <- gWidgets::gbutton("Remove marked folder",container=tab2a,handler=f_delFolder,action="EVID")
+  tab2a = gWidgets::glayout(spacing=spc,container=(tab2[2,1] <-gWidgets::gframe("Selected evidence folders",container=tab2))) 
+#  tab2a[1,1] <- gWidgets::glabel("Selected folders:",container=tab2a)
+  tab2a[1,1] <- gWidgets::gbutton("Add a folder",container=tab2a,handler=f_addFolder,action="EVID")
+  tab2a[2,1] <- gWidgets::gbutton("Remove marked",container=tab2a,handler=f_delFolder,action="EVID")
+  tab2a[2,2] <- gWidgets::gcheckbox(text="Consider subfolders", checked = get("setup",envir=mmTK)$searchSubFoldersEvid,container=tab2a,
+                            handler = function(x) {
+                              opt = get("setup",envir=mmTK)  #receive settings from envir (preassigned or from file)
+                              opt$searchSubFoldersEvid = gWidgets::svalue(tab2a[2,2])
+                              assign("setup",opt,envir=mmTK) #set to envir again
+                            })
   folds = getFolds("EVID") 
   if(is.null(folds) || length(folds)==0)  folds = longspace #numeric()
   tab2a[1,2] <- gWidgets::gcombobox(items=folds,container=tab2a)
-  if(folds[1] == longspace) gWidgets::enabled(tab2a[2,2]) = FALSE
+  if(folds[1] == longspace) gWidgets::enabled(tab2a[2,1]) = FALSE
  
-  tab2b = gWidgets::glayout(spacing=spc,container=(tab2[3,1] <-gWidgets::gframe("Selecting reference folders",container=tab2))) 
-  tab2b[1,1] <- gWidgets::glabel("Selected folders:",container=tab2b)
-  tab2b[2,1] <- gWidgets::gbutton("Add a folder",container=tab2b,handler=f_addFolder,action="REF")
-  tab2b[2,2] <- gWidgets::gbutton("Remove marked folder",container=tab2b,handler=f_delFolder,action="REF")
+  tab2b = gWidgets::glayout(spacing=spc,container=(tab2[3,1] <-gWidgets::gframe("Selected reference folders",container=tab2))) 
+#  tab2b[1,1] <- gWidgets::glabel("Selected folders:",container=tab2b)
+  tab2b[1,1] <- gWidgets::gbutton("Add a folder",container=tab2b,handler=f_addFolder,action="REF")
+  tab2b[2,1] <- gWidgets::gbutton("Remove marked",container=tab2b,handler=f_delFolder,action="REF")
+  tab2b[2,2] <- gWidgets::gcheckbox(text="Consider subfolders", checked = get("setup",envir=mmTK)$searchSubFoldersEvid,container=tab2b,
+                            handler = function(x) {
+                              opt = get("setup",envir=mmTK)  #receive settings from envir (preassigned or from file)
+                              opt$searchSubFoldersRef = gWidgets::svalue(tab2b[2,2])
+                              assign("setup",opt,envir=mmTK) #set to envir again
+                            })
   folds = getFolds("REF") 
   if(is.null(folds) || length(folds)==0)  folds = longspace #numeric()
   tab2b[1,2] <- gWidgets::gcombobox(items=folds,container=tab2b)
-  if(folds[1] == longspace) gWidgets::enabled(tab2b[2,2]) = FALSE
+  if(folds[1] == longspace) gWidgets::enabled(tab2b[2,1]) = FALSE
 
 
   tab2c = gWidgets::glayout(spacing=spc,container=(tab2[4,1] <-gWidgets::gframe("Selecting specific SampleIDs (SIDs)",container=tab2))) 
@@ -697,6 +753,7 @@ gui= function(envirfile=NULL) {
 ####################################################
 
   txtbool = c("NO","YES")
+  txtsearch = c("MAC","+Qual","++Quan") #search options
   tab3 <- gWidgets::glayout(spacing=spc,container=tabsearch ) 
 
   tab3a = gWidgets::glayout(spacing=spc,container=(tab3[1,2] <-gWidgets::gframe("Search options",container=tab3))) 
@@ -704,7 +761,9 @@ gui= function(envirfile=NULL) {
   tab3a[1,2] <- gWidgets::gradio(items=txtbool,container=tab3a,horizontal = TRUE,selected=sum(get("setup",envir=mmTK)$sameCID)+1 )
   tab3a[2,1] <- gWidgets::glabel("Search between stains:",container=tab3a)
   tab3a[2,2] <- gWidgets::gradio(items=txtbool,container=tab3a,horizontal = TRUE,selected=sum(get("setup",envir=mmTK)$betweensamples)+1)
-
+  tab3a[3,1] <- gWidgets::glabel("Search strategy:",container=tab3a)
+  tab3a[3,2] <- gWidgets::gradio(items=txtsearch,container=tab3a,horizontal = TRUE,selected=get("setup",envir=mmTK)$searchoption)
+  
   tab3b = gWidgets::glayout(spacing=spc,container=(tab3[2,2] <-gWidgets::gframe("Time windows",container=tab3))) 
   tab3b[1,1] <- gWidgets::glabel("Number of days back (days):",container=tab3b)
   tab3b[1,2] <- gWidgets::gedit(get("setup",envir=mmTK)$Thist,container=tab3b)
@@ -759,13 +818,18 @@ gui= function(envirfile=NULL) {
   tab3f[2,2] <- gWidgets::gradio(txtbool,horizontal=TRUE,container=tab3f,selected=sum(get("setup",envir=mmTK)$writeScores)+1 )
   tab3f[3,1] <- gWidgets::glabel("Print graph of matches:",container=tab3f)
   tab3f[3,2] <- gWidgets::gradio(items=txtbool,container=tab3f,horizontal = TRUE,selected=sum(get("setup",envir=mmTK)$printGraph)+1)
-
-  tab3f[4,1] <- gWidgets::glabel("Maximum number of contributors:",container=tab3f)
-  tab3f[5,1] <- gWidgets::glabel("Qualitative LR:",container=tab3f)
+  tab3f[4,1] <- gWidgets::glabel("Ignore empty markers:",container=tab3f)
+  tab3f[4,2] <- gWidgets::gradio(items=txtbool,container=tab3f,horizontal = TRUE,selected=sum(get("setup",envir=mmTK)$ignoreEmptyLoci)+1)
+  
+#  tab3f[5,1] <- gWidgets::glabel("Maximum number of contributors:",container=tab3f)
+  tab3f[5,1] <- gWidgets::glabel("Max contr.num. (QUAL):",container=tab3f)
   tab3f[5,2] <- gWidgets::gedit(get("setup",envir=mmTK)$maxKqual,container=tab3f)
-  tab3f[6,1] <- gWidgets::glabel("Quantitative LR:",container=tab3f)
+  tab3f[6,1] <- gWidgets::glabel("Max contr.num. (QUAN):",container=tab3f)
   tab3f[6,2] <- gWidgets::gedit(get("setup",envir=mmTK)$maxKquan,container=tab3f)
-
+  tab3f[7,1] <- gWidgets::glabel("Req.optim.num. (QUAN):",container=tab3f) #required number of optimizations for quantitative model
+  tab3f[7,2] <- gWidgets::gedit(get("setup",envir=mmTK)$nDone,container=tab3f)
+  
+  
   tab3[4,1] = gWidgets::gbutton("Save settings",container=tab3,handler = 
 	function(h,...) { 
 	#CHECKS: checkProb[0,1];checkPositive[(0;checkPosInteger[(1;  (val,what,strict)
@@ -792,16 +856,21 @@ gui= function(envirfile=NULL) {
 	#values should be integers (positive or zero) 
 	opt$minLocStain = checkPosInteger(val(tab3e[4,2]),"Minimum loci (EVID) threshold",strict=FALSE)
 	opt$minLocMaj = checkPosInteger(val(tab3e[5,2]),"Minimum loci (MAJ) threshold",strict=FALSE)
-	opt$maxKqual = checkPosInteger(val(tab3f[5,2]),"Maximum number of contributors (QUAL)",strict=FALSE)
-	opt$maxKquan = checkPosInteger(val(tab3f[6,2]),"Maximum number of contributors (QUAN)",strict=FALSE)
-
+	opt$maxKqual = checkPosInteger(val(tab3f[5,2]),"Maximum number of contributors (QUAL)",strict=TRUE)
+	opt$maxKquan = checkPosInteger(val(tab3f[6,2]),"Maximum number of contributors (QUAN)",strict=TRUE)
+	opt$nDone = checkPosInteger(val(tab3f[7,2]),"Number of required optimizations (QUAN)",strict=TRUE)
+	
 	#NO/YES choice
 	opt$sameCID = gWidgets::svalue(tab3a[1,2])==txtbool[2]
 	opt$betweensamples = gWidgets::svalue(tab3a[2,2])==txtbool[2]
 	opt$printHistPlots = gWidgets::svalue(tab3f[1,2])==txtbool[2]
 	opt$writeScores = gWidgets::svalue(tab3f[2,2])==txtbool[2]
 	opt$printGraph = gWidgets::svalue(tab3f[3,2])==txtbool[2]
-
+	opt$ignoreEmptyLoci = gWidgets::svalue(tab3f[4,2])==txtbool[2]
+	
+	#indicate search option
+	opt$searchoption = which(gWidgets::svalue(tab3a[3,2])==txtsearch)
+	
 	#Text format:
 	opt$kit = gWidgets::svalue(tab3d[1,2])
      tmp = gWidgets::svalue(tab3b[3,2]) #get search time
@@ -811,8 +880,8 @@ gui= function(envirfile=NULL) {
 
  	#Store settings:
      assign("setup",opt,envir=mmTK) #set to envir
-   	saveSetup(opt)
-	gWidgets::gmessage("Settings were saved successfully!",title="Message") 
+    	saveSetup(opt)
+  	gWidgets::gmessage("Settings were saved successfully!",title="Message") 
   }) #Done saving settings
 
 #########################################################
@@ -851,6 +920,45 @@ gui= function(envirfile=NULL) {
   tab4c[1,2] <- gWidgets::gcombobox(items=folds,container=tab4c)
   if(folds[1] == shortspace) gWidgets::enabled(tab4c[2,2]) = FALSE
 
+  
+  tab4d = gWidgets::glayout(spacing=spc,container=(tab4[4,1] <-gWidgets::gframe("Select import data functions (Evid/Ref):",container=tab4))) 
+  
+  tab4d[1,1] <- gWidgets::gbutton("Selected import function (Evid):",container=tab4d,handler = 
+                                    function(h,...) { 
+                                      fsel = gWidgets::gfile(text="Select file with R-function to import Evidence files",type="open")
+                                      if(!is.na(fsel)) {
+                                        opt = get("setup",envir=mmTK) #get
+                                        opt$fileReaderEvid = fsel #set selected file
+                                        assign("setup",opt,envir=mmTK) #set to envir
+                                        saveSetup(opt) #Save to file
+                                        gWidgets::svalue(tab4d[1,2]) = fsel
+                                      }
+                                    })
+  tab4d[1,2] <- gWidgets::glabel(get("setup",envir=mmTK)$fileReaderEvid,container=tab4d)
+  
+  tab4d[2,1] <- gWidgets::gbutton("Selected import function (Ref):",container=tab4d,handler = 
+                                    function(h,...) { 
+                                      fsel = gWidgets::gfile(text="Select file with R-function to import Reference files",type="open")
+                                      if(!is.na(fsel)) {
+                                        opt = get("setup",envir=mmTK) #get
+                                        opt$fileReaderRef = fsel #set selected file
+                                        assign("setup",opt,envir=mmTK) #set to envir
+                                        saveSetup(opt) #Save to file
+                                        gWidgets::svalue(tab4d[2,2]) = fsel
+                                      }
+                                    })
+  tab4d[2,2] <- gWidgets::glabel(get("setup",envir=mmTK)$fileReaderRef,container=tab4d)
+  
+  
+  tab4d[3,1] <- gWidgets::gbutton("Set back to default",container=tab4d,handler = 
+                                    function(h,...) { 
+                                      opt = get("setup",envir=mmTK) #get setup
+                                      opt$fileReaderRef <- opt$fileReaderEvid <- emptyName #set to default
+                                      assign("setup",opt,envir=mmTK) #set to envir
+                                      saveSetup(opt) #Save to file
+                                      svalue(tab4d[1,2]) = emptyName #reset in GUI
+                                      svalue(tab4d[2,2]) = emptyName #reset in GUI 
+                                    })
   
   gWidgets::visible(mainwin) = TRUE
 

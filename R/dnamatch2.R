@@ -32,7 +32,7 @@
 #' @param minLocMaj Number of minimum loci which are required to be considered for a major component (extracted from each stain profile).
 #' @param pC Assumed drop-in rate per marker (parameter in the LR models).
 #' @param lambda Assumed hyperparameter lambda for peak height drop-in model (parameter in quantiative model).
-#' @param kit The shortname of the kit used for the samples (default is no kit specified). This allows for taking into account degradation. Use getKit function in euroformix R-package.
+#' @param kit The shortname of the kit used for the samples (default is no kit specified). This will use the euroformix degradation model on the evidence samples. NB: Don't use if evidence profiles are run with several kits!
 #' @param minFreq Minimum frequency for rare alleles. Used to assign new allele frequenceis. Default is 0.001.
 #' @param searchtime An object with format as returned from Sys.time(). Default is Sys.time().
 #' @param SIDvec A vector with Sample-ID numbers which are considered in the search (i.e. a search filter).
@@ -40,115 +40,143 @@
 #' @param CIDvec A vector with Case-ID numbers which are considered in the search (i.e. a search filter).
 #' @param timediff Timedifference (in days) allowed between matching reference and target. Default is NULL (not used).
 #' @param IDsep Seperator sign between SID,RID,CID in SampleName. Default is "_", giving SampleName structure SID_RID_CID.
-#' @param BIDptrn Filename structure of stain files to evaluate. For instance BIDptrn="TA-".
-#' @param SIDptrn Pattern of name which is sample ID (SID_RID_CID)=("01-S0001_BES00001-14_2014234231"). Here SIDptrn="-S" and SID="0001". Can also be a vector.
+#' @param BIDptrn Filename structure of stain files to search. For instance BIDptrn="TA-".
+#' @param SIDptrn Pattern of name of which sample ID should be searched Example: (SID_RID_CID)=("01-S0001_BES00001-14_2014234231"). Here SIDptrn="-S" means that only SID with -S should be searched. Can be a vector.
 #' @param printHistPlots Boolean of showing plots of the scores (number of matching alleles or LRs) for each comparisons. 
 #' @param writeScores Writes detailed score information to file. Default is FALSE.
 #' @param maxK The maximum number of contributors used in the search. Can be a vector for (qual,quan) methods. Default is c(4,3)
 #' @param matchfile The name of the matchfile where multiple searches are stored in one place. Default is "matchfile.csv".
 #' @param sessionfold The name of the folder with run sessions. Default is "sessions".
+#' @param searchoption Selected search module to carry out search (1=MAC, 2=MAC+QUAL, 3=MAC+QUAL+QUAN)
+#' @param nDone Number of required optimizations for euroformix model (contLikMLE)
+#' @param ignoreEmptyLoci Whether empty loci should be ignored in calculation. NB: This should only be FALSE if all evidence profiles contains all markers as specified in population frequency data (i.e. all evid profiles contains the same markers)
+#' @param searchSubFoldersEvid Whether to extract files from subfolders for evidence profiles
+#' @param searchSubFoldersRef Whether to extract files from subfolders for reference profiles
+#' @param importEvidFile A file name including a function for reading evidence files (function euroformix::tableReader used if NULL)
+#' @param importRefFile A file name including a function for reading reference files (function euroformix::tableReader used if NULL)
 #' @references dnamatch2: An open source software to carry out large scale database searches of mixtures using qualitative and quantitative models.
 #' @export
 
 #library(roxygen2);roxygenize("dnamatch2")
 
 dnamatch2 <- function (evidfold, freqfile, reffold = NULL, sameCID = FALSE ,betweensamples=TRUE, 
-    Thist = Inf, threshMAC=0.75, threshLR = c(10,100), threshHeight = 200,threshStutt = 0.1, threshMaj = 0.6, 
-    minLocStain=3,minLocMaj=3, pC = 0.05, lambda=0.01,kit=NULL,
-    minFreq = 0.001, searchtime=Sys.time(),SIDvec=NULL,BIDvec=NULL,CIDvec=NULL,timediff=NULL,IDsep = "_", BIDptrn=NULL, SIDptrn=NULL, 
-    printHistPlots=FALSE,writeScores=FALSE,maxK=c(4,3),matchfile="matchfile.csv",sessionfold="sessions") 
+                       Thist = Inf, threshMAC=0.75, threshLR = c(10,100), threshHeight = 200,threshStutt = 0.1, threshMaj = 0.6, 
+                       minLocStain=3,minLocMaj=3, pC = 0.05, lambda=0.01,kit=NULL,
+                       minFreq = 0.001, searchtime=Sys.time(),SIDvec=NULL,BIDvec=NULL,CIDvec=NULL,timediff=NULL,IDsep = "_", BIDptrn=NULL, SIDptrn=NULL, 
+                       printHistPlots=FALSE,writeScores=FALSE,maxK=c(4,3),matchfile="matchfile.csv",sessionfold="sessions",searchoption=3,
+                       nDone=4, ignoreEmptyLoci=TRUE, searchSubFoldersEvid=FALSE , searchSubFoldersRef=FALSE, importEvidFile=NULL, importRefFile=NULL) 
 {
+  
+  #library(forensim) #requires v4.3
+  #library(euroformix) #v3.0.0 is recommended
+  newf0 <- minFreq #5/(2 * N) #allele-frequence for new alleles
+  if (!dir.exists(sessionfold) )  dir.create(sessionfold) #create folder if not existing
+  
+  #get search stamp as time when function is executed
+  stamp <- format(searchtime, "%y-%m-%d-%H-%M-%S")  #timestamp: Year-month-day-hour-minute-second
+  
+  #CREATE LOG-FILE (saved in session).  User, versions, input for search.
+  txt =  "THIS IS A LOG FOR A dnamatch2 RUN"
+  txt <- paste0(txt,"\ndnamatch2 version: ",packageVersion("dnamatch2"))
+  txt <- paste0(txt,"\nOther packages: (euroformix_",packageVersion("euroformix"),", forensim_",packageVersion("forensim"),")")
+  txt <- paste0(txt,"\nR-version used: ",R.version.string) #Add R-version used
+  txt <- paste0(txt,"\nUser: ",Sys.getenv("USERNAME"))
+  txt <- paste0(txt,"\nCreated: ",Sys.time(),"\n")
+  
+  txt <- paste0(txt,"\n-------FUNCTION CALL-------\n")
+  args = names(as.list(  match.call() )) #get list of arguments
+  for(i in 2:length(args)) txt = paste0(txt,args[i],": ", paste0(get(args[i]),collapse="/"),"\n") #Show each arguments
+  write.table(txt, file = paste0(sessionfold,"/searchLog_",stamp,".csv"), row.names = FALSE, col.names = FALSE, sep = ";", append = FALSE,quote=FALSE)
+  
+  
+  ###############
+  #HELPFUNCTIONS#
+  ###############
+  
+  #helpfunction to obtain read evidence and ref function from selected R-files:
+  obtainFun = function(Rfile) {
+    ret = source(Rfile,new.env(parent = globalenv() ),echo=FALSE) #obtain function with source 
+    return( ret$value ) 
+  }
 
-    library(forensim) #requires at least v4.3
-    library(euroformix) #requires at least v0.6.4
-    newf0 <- minFreq #5/(2 * N) #allele-frequence for new alleles
-    if (!dir.exists(sessionfold) )  dir.create(sessionfold) #create folder if not existing
-
-    #get search stamp as time when function is executed
-    stamp <- format(searchtime, "%y-%m-%d-%H-%M-%S")  #timestamp: Year-month-day-hour-minute-second
-
-    #CREATE LOG-FILE (saved in session).  User, versions, input for search.
-    txt =  "THIS IS A LOG FOR A dnamatch2 RUN"
-    txt <- paste0(txt,"\ndnamatch2 version: ",packageVersion("dnamatch2"))
-    txt <- paste0(txt,"\nOther packages: (euroformix_",packageVersion("euroformix"),", forensim_",packageVersion("forensim"),")")
-    txt <- paste0(txt,"\nR-version used: ",R.version.string) #Add R-version used
-    txt <- paste0(txt,"\nUser: ",Sys.getenv("USERNAME"))
-    txt <- paste0(txt,"\nCreated: ",Sys.time(),"\n")
-    
-    txt <- paste0(txt,"\n-------FUNCTION CALL-------\n")
-    args = names(as.list(  match.call() )) #get list of arguments
-    for(i in 2:length(args)) txt = paste0(txt,args[i],": ", paste0(get(args[i]),collapse="/"),"\n") #Show each arguments
-    write.table(txt, file = paste0(sessionfold,"/searchLog_",stamp,".csv"), row.names = FALSE, col.names = FALSE, sep = ";", append = FALSE,quote=FALSE)
-
-	###############
-	#HELPFUNCTIONS#
-	###############
-    strsplit2 <- function(x, spl) {
-        if (nchar(x) == 0)  return("")
-        txt <- x
-        for (j in 1:length(spl)) {
-            txt <- unlist(strsplit(txt, split = spl[j]))
-        }
-        return(txt)
+  #Boolean of whether all letters are numbers    
+  isNum  = function(x) suppressWarnings({ !is.na(as.numeric(x)) })
+  
+  #split with multiple separators
+  strsplit2 <- function(x, spl) {
+    if (nchar(x) == 0)  return("")
+    txt <- x
+    for (j in 1:length(spl)) {
+      txt <- unlist(strsplit(txt, split = spl[j]))
     }
-    makematrix <- function(x) { #not necessary if you use X[1,,drop=F]
-        if (is.null(dim(x))) x <- t(x)
-        return(x)
-    }
-    prim = as.integer(c(2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 
-        37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 
-        101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 
-        157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 
-        223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 
-        277, 281, 283, 293, 307, 311, 313, 317, 331, 337, 347, 
-        349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 
-        419, 421, 431, 433, 439, 443, 449, 457, 461, 463, 467, 
-        479, 487, 491, 499, 503, 509, 521, 523, 541, 547, 557, 
-        563, 569, 571, 577, 587, 593, 599, 601, 607, 613, 617, 
-        619, 631, 641, 643, 647, 653, 659, 661, 673, 677, 683, 
-        691, 701, 709, 719, 727, 733, 739, 743, 751, 757, 761, 
-        769, 773, 787, 797, 809, 811, 821, 823, 827, 829, 839, 
-        853, 857, 859, 863, 877, 881, 883, 887, 907, 911, 919, 
-        929, 937, 941, 947, 953, 967, 971, 977, 983, 991, 997, 
-        1009, 1013, 1019, 1021, 1031, 1033, 1039, 1049, 1051, 
-        1061, 1063, 1069, 1087, 1091, 1093, 1097, 1103, 1109, 
-        1117, 1123, 1129, 1151, 1153, 1163, 1171, 1181, 1187, 
-        1193, 1201, 1213, 1217, 1223, 1229, 1231, 1237, 1249, 
-        1259, 1277, 1279, 1283, 1289, 1291, 1297, 1301, 1303, 
-        1307, 1319, 1321, 1327, 1361, 1367, 1373, 1381, 1399, 
-        1409, 1423, 1427, 1429, 1433, 1439, 1447, 1451, 1453, 
-        1459, 1471, 1481, 1483, 1487, 1489, 1493, 1499, 1511, 
-        1523, 1531, 1543, 1549)) #max number of allele outcome (per marker) is 244
+    return(txt)
+  }
+  makematrix <- function(x) { #not necessary if you use X[1,,drop=F]
+    if (is.null(dim(x))) x <- t(x)
+    return(x)
+  }
+  prim = as.integer(c(2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 
+                      37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 
+                      101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 
+                      157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 
+                      223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 
+                      277, 281, 283, 293, 307, 311, 313, 317, 331, 337, 347, 
+                      349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 
+                      419, 421, 431, 433, 439, 443, 449, 457, 461, 463, 467, 
+                      479, 487, 491, 499, 503, 509, 521, 523, 541, 547, 557, 
+                      563, 569, 571, 577, 587, 593, 599, 601, 607, 613, 617, 
+                      619, 631, 641, 643, 647, 653, 659, 661, 673, 677, 683, 
+                      691, 701, 709, 719, 727, 733, 739, 743, 751, 757, 761, 
+                      769, 773, 787, 797, 809, 811, 821, 823, 827, 829, 839, 
+                      853, 857, 859, 863, 877, 881, 883, 887, 907, 911, 919, 
+                      929, 937, 941, 947, 953, 967, 971, 977, 983, 991, 997, 
+                      1009, 1013, 1019, 1021, 1031, 1033, 1039, 1049, 1051, 
+                      1061, 1063, 1069, 1087, 1091, 1093, 1097, 1103, 1109, 
+                      1117, 1123, 1129, 1151, 1153, 1163, 1171, 1181, 1187, 
+                      1193, 1201, 1213, 1217, 1223, 1229, 1231, 1237, 1249, 
+                      1259, 1277, 1279, 1283, 1289, 1291, 1297, 1301, 1303, 
+                      1307, 1319, 1321, 1327, 1361, 1367, 1373, 1381, 1399, 
+                      1409, 1423, 1427, 1429, 1433, 1439, 1447, 1451, 1453, 
+                      1459, 1471, 1481, 1483, 1487, 1489, 1493, 1499, 1511, 
+                      1523, 1531, 1543, 1549)) #max number of allele outcome (per marker) is 244
+  
+  
+  #0) Configurate file reader functions (evid/ref)
+  fileReaderEvid <- fileReaderRef <- euroformix::tableReader #set default function
+  if(!is.null(importEvidFile)) {
+    fileReaderEvid = obtainFun(importEvidFile) #obtain function from file
+    if(!is.function(fileReaderEvid)) stop("Failed to obtain function for reading evidence profiles")
+  }
+  if(!is.null(importRefFile)) {
+    fileReaderRef = obtainFun(importRefFile) #obtain function from file
+    if(!is.function(fileReaderRef)) stop("Failed to obtain function for reading reference profiles")
+  }
 
-    #1) Configurate Kit:
-    popFreq = euroformix::freqImport(freqfile)[[1]] #read frequencies from file using function in EFM
-    locs = names(popFreq)
-
-    #encode allele names with prime numbers:
-    popFreqP = popFreq
-    for (loc in locs) names(popFreqP[[loc]]) <- prim[1:length(popFreq[[loc]])]
-
-    DBcolN <- c("ID","SID","CID","BID","Time") #column name of DBrefN and DBstainN: (id,sampleID,"CaseID","Batch-file","Time")
-    #2) IMPORT References:
-    DBref <- matrix(nrow = 0, ncol = length(locs)) #encoded matrix
-    DBrefN <- numeric()  #corresponding names
-
-    #IMPORT Rfiles (Reference files)
-    Rfiles <- NULL
-    if (!is.null(reffold)) { #only run if reffolders are specified
-      for( reffold1 in reffold) { #loop through all selected folders
-        Rfiles <- list.files(reffold1) #look files
-    
-        for (Rfile in Rfiles) {
-#Rfile=Rfiles[1]
-          fname = paste0(reffold1, "/", Rfile)
-          tryCatch( { 
-            X = euroformix::tableReader(fname)
-          },error = function(e) {
-            print(paste0("Failed to read file ",fname) ) 
-            next #skip to next file
-          })
-
+  #1) Configurate Kit:
+  popFreq = euroformix::freqImport(freqfile)[[1]] #read frequencies from file using function in EFM
+  locs = names(popFreq) #locus names to use in data (AMEL can be ignored)
+  
+  #encode allele names with prime numbers:
+  popFreqP = popFreq
+  for (loc in locs) names(popFreqP[[loc]]) <- prim[1:length(popFreq[[loc]])]
+  
+  DBcolN <- c("ID","SID","CID","BID","Time") #column name of DBrefN and DBstainN: (id,sampleID,"CaseID","Batch-file","Time")
+  #2) IMPORT References:
+  DBref <- matrix(nrow = 0, ncol = length(locs)) #encoded matrix
+  DBrefN <- numeric()  #corresponding names
+  
+  #IMPORT Rfiles (Reference files)
+  Rfiles <- NULL
+  if (!is.null(reffold)) { #only run if reffolders are specified
+    for( reffold1 in reffold) { #loop through all selected folders
+      Rfiles <- list.files(reffold1, include.dirs = FALSE, recursive = searchSubFoldersRef) #look files
+      
+      for (Rfile in Rfiles) {
+        #Rfile=Rfiles[1]
+        fname = paste0(reffold1, "/", Rfile)
+        tryCatch( { 
+          X = fileReaderRef(fname)
+          #X[is.na(X)] = "" #remove NA
           cn = colnames(X)
           sind = grep("ID", toupper(cn)) #sample col-ind
           if (length(sind) == 0)  sind = grep("SAMPLE", toupper(cn))
@@ -160,78 +188,93 @@ dnamatch2 <- function (evidfold, freqfile, reffold = NULL, sameCID = FALSE ,betw
           }
           lind = grep("marker", tolower(cn)) #locus col-ind
           if (length(lind) == 0)  lind = grep("LOC", toupper(cn))
-
+          
           X[, lind] <- toupper(X[, lind]) #make all loci upper-case
-          ln = unique(X[, lind]) #locus names
-          if (!all(locs %in%ln)) {
-            print(paste0("Reference-File '", Rfile, "' had another kit-format than given in the frequency file!"))
-            next
-          }
+          ln = intersect(locs,unique(X[, lind])) #import common markers for evid/refs
+          #if (!all(locs %in%ln)) {
+          #  print(paste0("Reference-File '", Rfile, "' had another kit-format than given in the frequency file!"))
+          #  next
+          #}
           Aind = grep("allele", tolower(cn))[1:2] #allele col-ind. Only consider the two first
           ishom <- X[, Aind[2]] == "" | is.na(X[, Aind[2]])
           X[ishom, Aind[2]] <- X[ishom, Aind[1]] #add homozygote to both
-  
-	     #Introduce fast encoding:
+          
+          #Introduce fast encoding: 1 means that it is no alleles
           smallREF <- matrix(1, ncol = length(locs), nrow = length(sn))
-          for (loc in locs) {
+          for (loc in ln) { #traverse each locus in file
             locind <- which(X[, lind] == loc) #get index of loci
             tmp <- popFreq[[loc]]
             tmpP <- popFreqP[[loc]]
-            av = unique(unlist(X[locind, Aind])) #get unique alleles
+            av = unique( as.character(X[locind, Aind]) ) #vectorize and get unique alleles 
             av = av[!is.na(av) & av!=""] #remove empty alleles
             newA <- av[!av%in%names(popFreq[[loc]])] #get new Alleles
             if (length(newA) > 0) {
-                tmp <- popFreq[[loc]]
-                tmpP <- popFreqP[[loc]]
-                popFreqP[[loc]] <- popFreq[[loc]] <- c(popFreq[[loc]], rep(newf0, length(newA))) #insert new freqs.
-                names(popFreq[[loc]]) <- c(names(tmp), newA) #insert new a-names
-                names(popFreqP[[loc]]) <- c(names(tmpP), prim[(length(tmp) + 1):length(popFreq[[loc]])]) #insert new p-names
+              tmp <- popFreq[[loc]]
+              tmpP <- popFreqP[[loc]]
+              popFreqP[[loc]] <- popFreq[[loc]] <- c(popFreq[[loc]], rep(newf0, length(newA))) #insert new freqs.
+              names(popFreq[[loc]]) <- c(names(tmp), newA) #insert new a-names
+              names(popFreqP[[loc]]) <- c(names(tmpP), prim[(length(tmp) + 1):length(popFreq[[loc]])]) #insert new p-names
             }
             Pname <- as.integer(names(popFreqP[[loc]]))  #get primenumbers
             Aname <- names(popFreq[[loc]])  #get allelenames
             for (an in Aname) { #for each alleles in population
-                for (ai in Aind) {
-                  aind <- X[locind, ai] == an #get rows which has corresponding allele
-                  srow <- which(sn %in% X[locind, sind]) #get belonging rows in smallREF
-                  smallREF[srow[aind], which(locs == loc)] <- smallREF[srow[aind], which(locs == loc)] * Pname[which(Aname == an)]
-                }
+              for (ai in Aind) { #for each alleles
+                aind <- which( X[locind, ai] == an ) #get rows which has corresponding allele (NA removed)
+                srow <- which(sn %in% X[locind, sind]) #get belonging rows in smallREF
+                smallREF[srow[aind], which(locs == loc)] <- smallREF[srow[aind], which(locs == loc)] * Pname[which(Aname == an)]
+              }
             } #end for each alleles
           }#end for each loci
           smallREF[smallREF == 1] = NA #insert missing loci as NA
           DBref <- rbind(DBref, smallREF)
           DBrefN <- rbind(DBrefN, cbind(sn,"0","0","0","0") )
+        },error = function(e) {
+          print(paste0("Failed to read file ",fname) ) 
+          print("Data import continues...") 
+        })
       } #end for each R-file
     } #end for each Reffold
   } #end if Reffold specified
   if (length(DBrefN) == 0) {
-       print("NOTE: No reference samples were imported!")
+    print("NOTE: No reference samples were imported!")
+    if( !betweensamples) {
+      print("Reference samples needed for further search since not searching between samples.")
+      return(FALSE)
+    }
   } else {
-       colnames(DBrefN) <- DBcolN 
-       #Check for duplicated R-ID:
-       if (length(unique(DBrefN[,DBcolN=="ID"])) != nrow(DBrefN))  stop("Some imported references had same R-ID")
+    colnames(DBrefN) <- DBcolN 
+    #Check for duplicated R-ID:
+    if (length(unique(DBrefN[,DBcolN=="ID"])) != nrow(DBrefN))  print("Some imported references had same R-ID. This is ignored.")
+    print(paste0("Number of imported references: ",nrow(DBrefN)))
   }
   colnames(DBref) <- locs
-
- #2) IMPORT Stains:
- DBstainA <- DBstainH <- DBstainN <- numeric() #matrices to store all stains, DBstainN stores SID(Sample),RID(replicate),CID(case),BID(batch)
- for(ff in evidfold) { #for each evidence folder
-#ff <- evidfold[1]
-	  Bfiles <- list.files(ff, pattern = BIDptrn) #Uses BID-pattern in files.
-	  if(!is.null(BIDvec) && length(Bfiles)>0) { #extract Bfiles which are selected in BIDvec
-	    induse = numeric()
-	    for(bid in BIDvec) induse = c(induse,  grep(bid,Bfiles) ) #store index of matches
-	    Bfiles = Bfiles[induse] #update
-	  }  
-	  	  
+  
+  #2) IMPORT Stains:
+  DBstainA <- DBstainH <- DBstainN <- numeric() #matrices to store all stains, DBstainN stores SID(Sample),RID(replicate),CID(case),BID(batch)
+  for(ff in evidfold) { #for each evidence folder
+    #ff <- evidfold[1]
+    Bfiles <- list.files(ff, pattern = BIDptrn, include.dirs = FALSE, recursive = searchSubFoldersEvid) #Uses BID-pattern in files.
+    if(!is.null(BIDvec) && length(Bfiles)>0) { #extract Bfiles which are selected in BIDvec
+      induse = numeric()
+      for(bid in BIDvec) induse = c(induse,  grep(bid,Bfiles) ) #store index of matches
+      Bfiles = Bfiles[induse] #update
+    }  
+    
 	  for (Bfile in Bfiles) {	 #for each file
-#Bfile = Bfiles[1]
+      #Bfile = Bfiles[16]
+	    if (which(Bfiles == Bfile)%%100 == 0)  print(paste0(round(which(Bfiles == Bfile)/length(Bfiles) * 100), "% import complete")) #print first?
 	    fname <- paste0(ff, "/", Bfile)
-	    tryCatch( { 
-	      X = euroformix::tableReader(fname)
-	    },error = function(e) {
-	      print(paste0("Failed to read file ",fname) ) 
-	      next #skip to next file
-	    })
+	    
+	    tryCatch( { #avoid crashing program
+
+      #get time-info from file (to this early):
+  		Tfile <- file.info(fname)$mtime #time when file was last modified!
+	  	Fdate <- format(Tfile)
+	  	Tdiff <- difftime(searchtime, Tfile, units = "days")  #use day resolution
+	  	Tdiff <- as.integer(strsplit(format(Tdiff, digits = 1)," ")[[1]][1]) #check roundoff (day resolution)
+	  	if (Tdiff<0 || Tdiff > Thist) next #don't import if file was modified more than Thist days ago, or newer than Searchtime
+  
+	    X = fileReaderEvid(fname) #reading table using inbuilt efm function
 		  cn = colnames(X)
 		  sind = grep("sample", tolower(cn)) #sample col-ind
 		  if (length(sind) > 1) sind <- sind[grep("name", tolower(cn)[sind])] #if multiple sind
@@ -239,13 +282,20 @@ dnamatch2 <- function (evidfold, freqfile, reffold = NULL, sameCID = FALSE ,betw
 		  sn = unique(X[, sind]) #sample names
 		  if (length(sn) == 0)   next  #this file did not contain valid samples!
 		
+		  #Obtain marker info:
 		  lind = grep("marker", tolower(cn))  #locus col-ind
-		  X[, lind] <- toupper(X[, lind]) #make all loci upper-case
-		  ln = unique(X[, lind]) #locus names:
-		  if (!all(locs%in%ln)) { #check that marker names are same as in the freq-file
-			  print(paste0("Mixture-File '", Bfile, "' had another kit-format than given in the frequency file!"))
+		  if (length(lind) == 0)  lind = grep("LOC", toupper(cn))
+		  X[, lind] <- toupper(X[, lind]) #make all loci upper-case (THIS IS VERY IMPORTANT!)
+		  ln = intersect(locs,unique(X[, lind])) #import common markers for evid/refs
+		  
+		  if (length(ln)==0 || (searchoption==3 && !is.null(kit) && !all(locs%in%ln))) { #check that marker names are same as in the freq-file
+			  print(paste0("Evidence-File '", Bfile, "' had another kit-format than given in the frequency file (can't use when kit is selected with searchoption=3)"))
 			  next
 		  }
+		  
+		  #Update data table to only include relevant markers:
+		  X = X[X[, lind]%in%ln,,drop=FALSE] 
+		  
 		  Aind = grep("allele", tolower(cn)) #allele col-ind
 		  Hind = grep("height", tolower(cn)) #height col-ind
 		  if (length(Aind) == 0 | length(Hind) == 0)  next  #if no allele or peak height info
@@ -255,42 +305,36 @@ dnamatch2 <- function (evidfold, freqfile, reffold = NULL, sameCID = FALSE ,betw
 		  SID <- sapply(tmp , function(x) x[1]) #extract SID
 		  RID <- sapply(tmp , function(x) x[2]) #extract RID
 		  CID <- sapply(tmp , function(x) x[3]) #extract CID
-		  RID[is.na(RID)] = "0" #default if missing
-		  CID[is.na(CID)] = "0" #default if missing
-		  if( !all(length(SID)==length(RID)) || !all(length(CID)==length(RID)) ) error("Requiring correct sampleName formats. See details ?dnamatch2.")
+		  RID[is.na(RID) | RID==""] = "0" #default if missing
+		  CID[is.na(CID) | CID==""] = "0" #default if missing
+		  if( !all(length(SID)==length(RID)) || !all(length(CID)==length(RID)) ) stop("Requiring correct sampleName formats. See details ?dnamatch2.")
 		  tmp <- strsplit2(Bfile, c(BIDptrn, "\\."))[1] #Get BatchID (remove extension)
-		  BID <- paste0(BIDptrn, tmp) #BID
-		  
-
-		  #get time-info from file:
-  		Tfile <- file.info(fname)$mtime #time when file was last modified!
-	  	Fdate <- format(Tfile)
-	  	Tdiff <- difftime(searchtime, Tfile, units = "days")  #use day resolution
-	  	Tdiff <- as.integer(strsplit(format(Tdiff, digits = 1)," ")[[1]][1]) #check roundoff (day resolution)
-	  	if (Tdiff<0 || Tdiff > Thist) next #don't import if file was modified more than Thist days ago, or newer than Searchtime
-  		
-  		induse2 = 1:length(sn) #default range to use
-  		if(!is.null(SIDvec) || !is.null(CIDvec) ) {
-  		  induse2 = numeric()
+		  BID <- paste0(BIDptrn, tmp) #Update BID
+		  		
+		  induse2 = 1:length(sn) #default range to use
+      if(!is.null(SIDptrn) && length(SIDptrn)>0) {
+        induse2 = numeric()
+        for(pat in SIDptrn) induse2 = c(induse2,  grep(pat ,SID) ) #store indices corresponds to  in SIDvec
+  		} 
+ 
+ 	  	if(!is.null(SIDvec) || !is.null(CIDvec) ) {
+		    induse2 = numeric()
   		  if(!is.null(SIDvec) && length(SIDvec)>0) { 
   		    for(sid in SIDvec) induse2 = c(induse2,  grep(sid,SID) ) #store indices corresponds to  in SIDvec
   		  }
   		  if(!is.null(CIDvec) && length(CIDvec)>0) { 
   		    for(cid in CIDvec) induse2 = c(induse2,  grep(cid,CID) ) #store indices corresponds to  in SIDvec
   		  }
-  		  if(!is.null(SIDptrn) && length(SIDptrn)>0) {
-  		    for(pat in SIDptrn) induse2 = c(induse2,  grep(cid,SID) ) #store indices corresponds to  in SIDvec
-  		  }
-  		  induse2 = unique(induse2) #consider only unique indices		
-  		}
-  
+   		}
+   		induse2 = unique(induse2) #consider only unique indices		
+ 
   		for (ss in induse2) { #for each combination of SID and RID (unique stains)
-  			subX <- X[X[, sind] == sn[ss], ] #get submatrix
+  			subX <- X[X[, sind] == sn[ss],,drop=FALSE] #get submatrix
   			SSvec <- rep(NA, length(locs))  #place to store allele-info into MAJOR/single source-matrix
   	
   			Avec <- Hvec <- rep(NA, length(locs))   #place to store allele/height-info into evidence-matrix
   			for (ii in 1:nrow(subX)) { #for each marker-row
-  				loc <- toupper(subX[ii, lind])
+  				loc <- subX[ii, lind]
   				locind <- grep(loc, locs) #find correct locus
   				if (length(locind) == 0)  next
   				Ainfo <- as.character(subX[ii, Aind]) #extract allele info
@@ -305,15 +349,26 @@ dnamatch2 <- function (evidfold, freqfile, reffold = NULL, sameCID = FALSE ,betw
   				Hinfo <- Hinfo[keep]
   				if (length(Ainfo) == 0) next
   				  
-  				#(2) Stutter-filter
-  				AllsNum <- as.numeric(Ainfo) #convert to numbers
-  				stuttindL <- which(as.character(AllsNum) %in% as.character(AllsNum - 1)) #stutter-alleles one low bp
-  				stuttindH <- which(as.character(AllsNum - 1) %in% as.character(AllsNum)) #stutter-alleles one high bp
-  				stuttR <- Hinfo[stuttindL]/Hinfo[stuttindH] #stutter-ratio is comparing observed peak heights
-  				remove <- stuttindL[stuttR < threshStutt]  #alleles to remove
-  				if (length(remove) > 0) {
-  					Ainfo <- Ainfo[-remove]
-  					Hinfo <- Hinfo[-remove]
+  				isNumAllele = rep(FALSE,length(Ainfo))
+  				for(i in 1:length(Ainfo)) isNumAllele[i] = isNum(Ainfo[i])  #check if allele can be converted to number
+  				
+  				#Check if alleles are both numeric and non-numericc
+  				if(length(unique(isNumAllele))==2) {
+    				 cat(paste0("Both numerical/non-numerical alleles found for:\nBatch=",BID,", Sample ",sn[ss],", Marker ",loc,"\nProgram will stop!\n") ) 
+     			  return(NULL)
+  				}
+  				
+  				#(2) Stutter-filter (only if all alleles are numeric)
+  				if(all(isNumAllele) ) {
+    				AllsNum <- as.numeric(Ainfo) #convert to numbers
+    				stuttindL <- which(as.character(AllsNum) %in% as.character(AllsNum - 1)) #stutter-alleles one low bp
+    				stuttindH <- which(as.character(AllsNum - 1) %in% as.character(AllsNum)) #stutter-alleles one high bp
+    				stuttR <- Hinfo[stuttindL]/Hinfo[stuttindH] #stutter-ratio is comparing observed peak heights
+    				remove <- stuttindL[stuttR < threshStutt]  #alleles to remove
+    				if (length(remove) > 0) {
+    					Ainfo <- Ainfo[-remove]
+    					Hinfo <- Hinfo[-remove]
+    				}
   				}
   				
   				#Insert new alleles
@@ -366,14 +421,19 @@ dnamatch2 <- function (evidfold, freqfile, reffold = NULL, sameCID = FALSE ,betw
   				DBrefN <- rbind(DBrefN , stainN) #add full sample name (as in v1.0)
   			}
   		}  #end for each sample
-	  	if (which(Bfiles == Bfile)%%10 == 0)  print(paste0(round(which(Bfiles == Bfile)/length(Bfiles) * 100), "% import complete"))
-	 } #end for each Bfiles
-  } #end for each fn path
+  
+      },error = function(e) { #throw error if file name failed to print
+	      print(paste0("Failed to read file ",fname) ) 
+            print("Data import continues...") 
+	    })
+	  } #end for each Bfiles
+	} #end for each fn path
  
   if (length(DBstainN) == 0)  {
     print("No evidence was imported! Search stops..")
     return(FALSE)
   }
+    
   colnames(DBstainN) <- DBcolN  
   colnames(DBstainA) <- colnames(DBstainH) <- locs
 
@@ -382,9 +442,9 @@ dnamatch2 <- function (evidfold, freqfile, reffold = NULL, sameCID = FALSE ,betw
   if (sum(dupind) > 0) {
       print(paste0("It was ", sum(dupind), " duplicated stain samples. Program continues after removing following duplicates:..."))
       print(DBstainN[dupind,])
-      DBstainN <- DBstainN[!dupind, ,drop=F]
-      DBstainA <- DBstainA[!dupind, ,drop=F]
-      DBstainH <- DBstainH[!dupind, ,drop=F]
+      DBstainN <- DBstainN[!dupind, ,drop=FALSE]
+      DBstainA <- DBstainA[!dupind, ,drop=FALSE]
+      DBstainH <- DBstainH[!dupind, ,drop=FALSE]
   }
 
 ########################################
@@ -395,14 +455,116 @@ dnamatch2 <- function (evidfold, freqfile, reffold = NULL, sameCID = FALSE ,betw
   nL <- ncol(DBstainA) #number of loci
   
   print(paste0("Number of loci to use: ",nL))
-  print(paste0("Number of imported samples: ",nS))
-  print(paste0("Number of imported references: ",nR))
+  print(paste0("Number of samples to search: ",nS))
+  print(paste0("Number of reference profiles to search: ",nR))
 
-  	
 ############################################################################################################################################
 ######################################COMPARISON#########################################################################
 #############################################################################################################################################
 
+  #helpfunction to store matchfile results to file 
+  storeResults = function(Ctab0) {
+    Ctab0 <- Ctab0[order(Ctab0[,ncol(Ctab0)],decreasing=T),,drop=F] #order results
+    
+    nLstain <- rowSums(!is.na(DBstainA[Ctab0[,1],,drop=F]) & !is.na(DBref[Ctab0[,2],,drop=F])) #get number of non-zero loci in both stain and reference
+    
+    #Create result matrix:
+    resMat <- cbind( DBrefN[Ctab0[,2], DBcolN=="BID"], DBstainN[Ctab0[,1], DBcolN=="BID"], DBrefN[Ctab0[,2], DBcolN=="ID"], DBstainN[Ctab0[,1], DBcolN=="ID"],nLstain,Ctab0[,-(1:2),drop=F])#,stamp)
+    if(ncol(resMat)==6) resMat = cbind(resMat,NA,NA,NA,NA) #filling empty with NA
+    if(ncol(resMat)==8) resMat = cbind(resMat,NA,NA) #filling empty with NA
+    
+    resMat = cbind(resMat,stamp)    
+    cn <- c("refBID","tarBID","refID","tarID","nLocs","MAC","nContr","LRqual","LRquan","Mx","Searchtime") #colnames (searchoption 3)
+    colnames(resMat) = cn
+    #FILTER AWAY SYMMETRIC MATCHES 
+    allSID <- cbind(resMat[,cn=="refID"],resMat[,cn=="tarID"] )
+    indrev <- as.character(allSID[, 1]) > as.character(allSID[, 2])
+    allSID[indrev, ] <- allSID[indrev, 2:1]  #sort columns
+    isdup <- duplicated(allSID) #find (redudance+symmetrical) matches already found before
+    resMat <- resMat[!isdup,,drop=F] #get only unique matches!
+    
+    #5) STORE MATCHES
+    write.table( resMat[ resMat[,cn=="refBID"]!="0",,drop=F] , file = paste0(sessionfold,"/stainmatches_", stamp, ".csv"), row.names = FALSE, sep = ";") #store matches not personell:
+    write.table( resMat[ resMat[,cn=="refBID"]=="0",,drop=F] , file = paste0(sessionfold,"/refmatches_", stamp, ".csv"), row.names = FALSE, sep = ";") #store matches only personell:
+    
+    matchingprofiles = function(resMat) {
+      if (length(resMat) == 0) return()
+      cn <- colnames(resMat)
+      refind <- which("refID" == cn)
+      tarind <- which("tarID" == cn)
+      refindBID <- which("refBID" == cn)
+      tarindBID <- which("tarBID" == cn)
+      
+      fulltab <- numeric()
+      for (ss in 1:nrow(resMat)) {
+        refID <- resMat[ss,refind]
+        refA <- DBref[DBrefN[,DBcolN=="ID"]==refID,,drop=F][1,] #get reference data: Make robust if several refs
+        tarID <- resMat[ss,tarind]
+        tarA <- DBstainA[DBstainN[,DBcolN=="ID"]==tarID,] #get reference data
+        tarH <- DBstainH[DBstainN[,DBcolN=="ID"]==tarID,] #get reference data
+        
+        nL0 = as.numeric(resMat[ss,cn=="nLocs"])
+        nL <- paste0("nLocs=",nL0)
+        mac0 = as.numeric(resMat[ss,cn=="MAC"])
+        mac <- paste0("MAC=", round(mac0,3)) #get rounded mac
+        mac2 <- paste0("MM=", round(2*nL0*(1-mac0)) ) #number of mismatches
+        mactxt = paste0(c(mac,mac2),collapse=" - ")
+        
+        Khat <- paste0("nContr=", round( as.numeric(resMat[ss,cn=="nContr"]),2))
+        lr1 <- paste0("LRqual=",signif(as.numeric(resMat[ss,cn=="LRqual"]),digits=5))
+        lr2 <- paste0("LRquan=",signif(as.numeric(resMat[ss,cn=="LRquan"]),digits=5))
+        mx <- paste0("Mx=",signif(as.numeric(resMat[ss,cn=="Mx"]),digits=3))
+        rowtab <- rbind(c(resMat[ss, refind],resMat[ss, tarind]),c(nL,mactxt),c(Khat,lr1),c(mx,lr2),c("----REFERENCE----","---------TARGET------"))
+        for (loc in locs) {
+          Pname <- as.integer(names(popFreqP[[loc]]))
+          Ei <- paste0(tarA[loc==locs]," - ",tarH[loc==locs])
+          RPi <- as.integer(refA[loc == locs])
+          Ri <- ifelse(!is.na(RPi),paste0(names(popFreq[[loc]])[RPi%%Pname ==  0], collapse = "/"),NA)
+          if(any(is.na(Ri))) next #don't show if ref is missing
+          if(!grepl("/",Ri)) Ri <- paste0(Ri,"/",Ri)
+          rowtab <- rbind(rowtab, c(paste0(loc,": ",Ri), Ei)) #v1.4 updated
+        }
+        fulltab <- rbind(fulltab, rep(paste0("----------", ss, "----------"), 2))
+        fulltab <- rbind(fulltab, rowtab)
+        fulltab <- rbind(fulltab, rep(paste0("------------------------------"), 2))
+      }
+      return(fulltab)
+    }
+    #store details of all matches:
+    write.table(matchingprofiles(resMat), file = paste0(sessionfold,"/matchinfo_", stamp, ".csv"), col.names = FALSE,row.names = FALSE, sep = "\t")
+    
+    #Number of matches:
+    print(paste0("Number of matches=", nrow(resMat)))
+    
+    #THIS BLOCK: Loads matches in matchfile. Makes sure that new matches don't duplicate with old (not even the symmetry)
+    if (!file.exists(matchfile)) { #create empty file if not found
+      x <- matrix(NA, ncol = length(cn), nrow = 0)
+      colnames(x) <- cn
+      write.table(x, file = matchfile, row.names = FALSE, col.names = TRUE, sep = ";")
+    }
+    if(length(resMat) > 0) {
+      matchlist2 <- read.table(file = matchfile, sep = ";", header = TRUE, stringsAsFactors = FALSE) 
+      cn2 <- colnames(matchlist2)
+      if(length(cn)!=length(cn2)) print("Existing file had wrong number of columns!")
+      SID <- cbind(resMat[,cn=="refID"],resMat[,cn=="tarID"] )
+      SID2 <- cbind(matchlist2[,cn2=="refID"],matchlist2[,cn2=="tarID"] )
+      
+      allSID <- rbind(SID2, SID) #combine ID from file and ID from new matches
+      allSID <- as.matrix(allSID) #vectors in matrix is already converted to factors, necessary to make string agaain!
+      indrev <- as.character(allSID[, 1]) > as.character(allSID[,2])
+      allSID[indrev, ] <- allSID[indrev, 2:1] #sort columns
+      isdup <- duplicated(allSID) #find (redudance+symmetrical) matches already found before
+      resMat2 <- resMat[!isdup[(nrow(SID2) + 1):length(isdup)], ,drop=F] #get only NEW matches!
+      print(paste0("Number of new matches=", nrow(resMat2)))
+      
+      if (length(resMat2) > 0) { #only if any new matches
+        write.table(resMat2, file = matchfile, row.names = FALSE, col.names = FALSE, sep = ";", append = TRUE)
+        if(length(resMat2)!=length(resMat) )  write.table(matchingprofiles(resMat), file = paste0(sessionfold,"/matchinfoNEW_", stamp, ".csv"), row.names = FALSE, col.names = FALSE,  sep = ";") #Only provide if different number of matches
+      } else {
+        print("NO NEW MATCHES!")
+      }
+    }
+  }
   
 ######################################################################
 #Part 1: Compare number of alleles in references included in evidence#
@@ -468,12 +630,12 @@ colnames(Ctab) <- c("stain","ref","score") #note the order: stainID first
 #FILTER 1b: remove for other reasons:
 #(1) Remove because it was the same stain:
 sameSID <- DBrefN[ Ctab[,2],DBcolN=="SID"]==DBstainN[ Ctab[,1],DBcolN=="SID"]  #check for mathces which have same sampleID
-Ctab <- Ctab[!sameSID,,drop=F] #remove those who are the same
+Ctab <- Ctab[!sameSID,,drop=FALSE] #remove those who are the same
     
 #(2) Remove because it was the same CID
 if (!sameCID) {
  sameCID2 <- DBrefN[ Ctab[,2],DBcolN=="CID"]==DBstainN[ Ctab[,1],DBcolN=="CID"]  #check for mathces which have same sampleID
- Ctab <- Ctab[!sameCID2,,drop=F] #remove those who are the same
+ Ctab <- Ctab[!sameCID2,,drop=FALSE] #remove those who are the same
 }
 
 #(3) Remove because it was outside time difference
@@ -482,24 +644,31 @@ if (betweensamples && !is.null(timediff)) {
   if(!all(isREF)) {
    diff <- abs(difftime(DBrefN[Ctab[!isREF,2],DBcolN=="Time"], DBstainN[ Ctab[!isREF,1],DBcolN=="Time"], units = "days"))
    isREF[!isREF] <- diff<=timediff #if ref-profile or inside time
-   Ctab <- Ctab[isREF,,drop=F] #keep only ref-profiles or inside time
+   Ctab <- Ctab[isREF,,drop=FALSE] #keep only ref-profiles or inside time
   }
 }
-nK <- nrow(Ctab)
+nK <- nrow(Ctab) #numer of comparisons to continue with
 print(paste0("Number of comparisons satisfying (after filters) threshMAC=",threshMAC,": ", nK))
 
-if(nK==0) {
+if(nK==0 ) { #if not more comparisons
   print("There were no more comparisons to do after simple allele matching. Program stops!")
   return(FALSE)
 }
 
 #Write results to file:
-if(0) { #writeScores DONT write this to file
-  out = cbind( DBstainN[Ctab[,1]], DBrefN[Ctab[,2]],signif(Ctab[,3],3))
+if( 0 ) { #write to file only if searchoption=1 (not considered causing large files)
+  ord = order(Ctab[,3],decreasing = TRUE) #sort results
+  out = cbind( DBstainN[Ctab[,1]], DBrefN[Ctab[,2]],signif(Ctab[ord,3],3))
   colnames(out) = c("Stain","Reference","MAC")
   write.table(out, file = paste0(sessionfold,"/MACresults_",stamp,".csv"), row.names = FALSE, col.names = TRUE, sep = ";", append = FALSE,quote=FALSE)
   rm(out);gc()
+} #dont 
+if( searchoption==1 ) { #write to file only if searchoption=1
+  print("Search completed! Storing results...")
+  storeResults(Ctab0=Ctab) #store results
+  return(TRUE)
 }
+
 #####################################################
 #Part 2: Calculate LRqual for relevant combinations:#
 #####################################################
@@ -521,7 +690,7 @@ logLik <- function(pDvec,joint=TRUE) {
            } 
            Ti <- unlist(data$refData[[loc]])
            if( length(Ti)==0 ) Ti=NULL
-           val <- c(val , log( likEvid( Ei,T=Ti,V=NULL,x=data$nU[loc==names(data$popFreq)],theta=0, prDHet=pDvec, prDHom=pDvec^2, prC=pC, freq=data$popFreq[[loc]]) ) )
+           val <- c(val , log( forensim::likEvid( Ei,T=Ti,V=NULL,x=data$nU[loc==names(data$popFreq)],theta=0, prDHet=pDvec, prDHom=pDvec^2, prC=pC, freq=data$popFreq[[loc]]) ) )
          } #end for each markers
          if(joint) val <- sum(val)
          return(val)
@@ -539,24 +708,25 @@ systime <- system.time( {
 for(ss in unStain) { #for each unique stain we estimate number of contr and calculate the LR for all the references
 # ss = unStain[1]
  dat <- DBstainA[ss,]
- locUseS <- !is.na(dat) | TRUE #loci to consider for sample: Assumes kit to popFreq. Important to get correct image of whole sample
- locs <- names(popFreq)[locUseS] #update locs to use in all calculations
+ locUseS <- !is.na(dat) #loci to consider for sample (only where it is data)
+ if(!ignoreEmptyLoci) locUseS <- locUseS | TRUE #loci to consider for sample: Assumes kit to popFreq. Important to get correct image of whole sample
+ ln = locs[locUseS] #get loci to use  in all calculations
+
  #if(any(is.na(dat))) stop("sasd")
  samples <- list(lapply(dat[locUseS], function(x) { #create sample data list
   a0 <- unlist(strsplit(x,"/"))
   if(all(is.na(a0))) a0 <- numeric()
   list(adata=a0)
  })) #strsplit(dat[locUseS],"/")
- data <- euroformix::Qassignate(samples, popFreq[locUseS],incS=FALSE)
+ data <- euroformix::Qassignate(samples, popFreq[ln],incS=FALSE)
  data$samples <- samples
  K <- 1 #Start with one ceiling(max(sapply(dat,function(x) length( unlist(strsplit(x,"/")) )))/2) #lowest number of contr
  
  done <- FALSE
- hdval <- matrix(,ncol=4,nrow=0) #columns: #contr,,dropprob,loglik_max,loglik_max-K
+ hdval <- matrix(NA,ncol=4,nrow=0) #columns: #contr,,dropprob,loglik_max,loglik_max-K
 
  while(!done) { #model selection for LRmix: Find MLE under hd
-      if(K>maxK[1]) break #maximum found (at most 3 contributors)
-      data$nU <- rep(K,length(locs)) #equal for all loci
+      data$nU <- rep(K,length(ln)) #equal for all loci
 
       tmp = Vectorize(negloglik)( log(pDv/(1-pDv)) )
       pD0 = pDv[which.min(tmp)]
@@ -565,11 +735,15 @@ for(ss in unStain) { #for each unique stain we estimate number of contr and calc
       pdhat <- 1/(1+exp(-foo$est)) #maximum likelihood dropout estimate 
       hdval <- rbind(hdval,c(K,pdhat,-foo$min, -foo$min - K))
       #print(hdval)
-      nval <- nrow(hdval)
-      if(nval>1 && as.numeric(hdval[nval,4])<as.numeric(hdval[nval-1,4]) ) {
-       done <- TRUE
+      nval <- nrow(hdval) #obtain number of rows
+      if(nval>1 && as.numeric(hdval[nval,4]) < as.numeric(hdval[nval-1,4]) ) {
+       done <- TRUE #We keep number of contributors
       } else {
-       K <- K + 1  
+       if(K==maxK[1]) { #maximum was obtained 
+         done = TRUE
+       } else {
+         K <- K + 1   #Increment number of contributors if not done
+       }
       }
   }
   indAIC <- which.max(hdval[,4]) 
@@ -581,18 +755,18 @@ for(ss in unStain) { #for each unique stain we estimate number of contr and calc
 
   #Calc. Hp to get LR:
   whatR <- which(ss == Ctab[,1]) #what ref ind to consider
-  subRef <- DBref[ Ctab[whatR,2], ,drop=F] #get references
+  subRef <- DBref[ Ctab[whatR,2], ,drop=FALSE] #get references
 
   for(r in 1:length(whatR) ) { #for each  reference to compare with selected 
-   data$nU <- rep(Khat - 1,length(locs)) #reduce number of unknown with one under Hp! Consider as vector, values may change
+   data$nU <- rep(Khat - 1,length(ln)) #reduce number of unknown with one under Hp! Consider as vector, values may change
 
    #fix refData:
-   subRef2 <- subRef[r,]
+   subRef2 <- subRef[r,] #get reference vector (with alleles)
    refD <- list()
-   for(loc in locs ) {
-      pri <- subRef2[loc==names(popFreq)] #get prime number
+   for(loc in ln ) {
+      pri <- subRef2[loc==locs] #get prime number
       if(is.na(pri)) {
-        data$nU[which(loc==locs)] <- data$nU[which(loc==locs)] + 1 #add an extra unknown if missing
+        data$nU[which(loc==ln)] <- data$nU[which(loc==ln)] + 1 #add an extra unknown if missing
 #        next #skip if empty 
 	   a0 <- numeric()
       } else {
@@ -601,16 +775,16 @@ for(ss in unStain) { #for each unique stain we estimate number of contr and calc
        a0 <- an[pri%%anP==0]
       }
       if(length(a0)==1) a0 <- rep(a0,2)
-	refD[[loc]] <- list(ref1=a0)     
+     	refD[[loc]] <- list(ref1=a0)     
    }
-   data2 <- Qassignate(samples, popFreq[locs],refD,incS=FALSE,incR=FALSE)
+   data2 <- euroformix::Qassignate(samples, popFreq[ln],refD,incS=FALSE,incR=FALSE) #make Q-assignation for included ref
    data$refData <- data2$refData 
    data$popFreq <- data2$popFreq #needed to update relevant loci
    foo <- nlm(Vectorize(negloglik),log(0.1/(1-0.1)))    #Optimize under Hp:
    log10LRqual[whatR[r]] <- (-foo$min - loghd)/log(10) #get calculated LR
  } #end for each references given unique stain
  ii <- which(ss==unStain)  
- if (ii%%20 == 0)  print(paste0(round(ii/nU* 100), "% LR qual calculation complete")) 
+ if (ii%%10 == 0)  print(paste0(round(ii/nU* 100), "% LR qual calculation complete")) 
 } #end for each stains
 #Kqual 
 })[3]
@@ -637,11 +811,16 @@ if(nK2==0) {
   return(FALSE)  
 }
 
-if(writeScores) {
+if(writeScores && searchoption>2 ) { #if write temporary scorings
   out = cbind( DBstainN[Ctab2[,1]], DBrefN[Ctab2[,2]],round(Ctab2[,3],3),Ctab2[,4],signif(Ctab2[,5],5))
   colnames(out) = c("Stain","Reference","MAC","nContr","LRqual")
   write.table(out, file = paste0(sessionfold,"/LRqualResults_",stamp,".csv"), row.names = FALSE, col.names = TRUE, sep = ";", append = FALSE,quote=FALSE)
   rm(out);gc()
+}
+if(searchoption==2) {
+  print("Search completed! Storing results...")
+  storeResults(Ctab0=Ctab2) #store results and stop program
+  return(TRUE)
 }
 
 #####################################################
@@ -650,12 +829,22 @@ if(writeScores) {
 #Using estimated contr. in Kqual for quan LR:
 #ALSO IT REQUIRES ALL MARKERS FOR REFERENCES: ADVANCED NOT IMPLEMENTED!
 log10LRquan <- mxhat <- rep(0,nK2) #store LR and mx
-locs <- colnames(DBstainA) #loci to consider
-nDone <- 4 #number of optimizations used (should be 4)
 unStain <- unique(Ctab2[,1]) #unique stain profiles
 nU <- length(unStain) #number of unique stains
 
 print(paste0("Calculating LRquan for ", nK2," combinations (",nU," unique samples)"))
+
+if( !is.null(kit) ) { #if kit is specified (degrad model)
+  kitinfo = euroformix::getKit(kit)
+  if(length(kitinfo)==1) {
+    print("Kit was not recognized. Please specify a valid kit to use the degradation model.")
+  } else {
+    if( !all( toupper(locs)%in%toupper(unique(kitinfo$Marker)) ) ) {
+      print("The user has specified markers which was not recognized in the getKit function. Please rename marker names in order to use degradation model!")
+      return(FALSE) #return from function
+    }
+  }
+}
 
 #Notice: Empty markers important because of information about allele dropouts.
 systime <- system.time( {
@@ -664,16 +853,22 @@ for(ss in unStain) { #for each unique stain we estimate number of contr.
  datA <- DBstainA[ss,]
  datH <- DBstainH[ss,] #get peak heights
 
+ #Specifying which markers to use:
+ locUseS <- !is.na(datA) #loci to consider for sample: Assumes kit to popFreq. Important to get correct image of whole sample
+ if(!ignoreEmptyLoci) locUseS <- locUseS | TRUE #loci to consider for sample: Assumes kit to popFreq. Important to get correct image of whole sample
+ ln = locs[locUseS] #get loci to use
+ 
  samples <- list()
- for(loc in locs) {
+ for(loc in ln) {
   ind <- which(locs==loc)
   a0 <- unlist(strsplit(datA[ind],"/"))
   h0 <- as.numeric(unlist(strsplit(datH[ind],"/")))
   if(is.na(datA[ind])) a0 <- h0 <- numeric()
   samples[[loc]] <- list(adata=a0,hdata=h0)
  }
- samples <- list(samples)
- data <- Qassignate(samples, popFreq[locUseS],incS=FALSE) #don't include stutters
+ samples <- list(samples) #select only loci to use
+ 
+ data <- euroformix::Qassignate(samples, popFreq=popFreq[ ln ],incS=FALSE) #don't include stutters
  nC <- Kqual[ ss == Ctab[,1] ][1] #number of contr as for qual model
  if(length(maxK)>1) nC = min(nC,maxK[2]) #use minimum of these if maxK specified for quan
 
@@ -684,12 +879,12 @@ for(ss in unStain) { #for each unique stain we estimate number of contr.
   #Calc. Hp to get LR:
   whatR <- which(ss == Ctab2[,1]) #what ref ind to consider
   subRef <- DBref[ Ctab2[whatR,2], ,drop=F] #get references
-  for(r in 1:length(whatR) ) {
+  for(r in 1:length(whatR) ) { #for each references
 #r=1
    #fix refData:
    subRef2 <- subRef[r,]
    refD <- list()
-   for(loc in locs) {
+   for(loc in ln) { #for each loci (selected)
       pri <- subRef2[loc==locs] #get prime number
       if(is.na(pri)) {
 	   a0 <- numeric() #if empty
@@ -699,10 +894,10 @@ for(ss in unStain) { #for each unique stain we estimate number of contr.
        a0 <- an[pri%%anP==0]
        if(length(a0)==1) a0 <- rep(a0,2)
       }
-	refD[[loc]] <- list(ref1=a0)     
+    	refD[[loc]] <- list(ref1=a0)     
    }
    #locUseR <- names(popFreq)%in%names(refD) #loci in ref.
-   data2 <- Qassignate(samples, popFreq[locs],refD,incS=FALSE,incR=FALSE) #popFreq must be given with correct order?
+   data2 <- euroformix::Qassignate(samples, popFreq[ln],refD,incS=FALSE,incR=FALSE) #popFreq must be given with correct order?
    data$refData <- data2$refData 
    data$popFreq <- data2$popFreq #needed to update relevant loci
 
@@ -717,6 +912,7 @@ for(ss in unStain) { #for each unique stain we estimate number of contr.
  if (ii%%5 == 0)  print(paste0(round(ii/nU* 100), "% LR quan calculation complete")) 
 } #end for each stains
 })[3]
+
 print(paste0("Calculating LR (quan) took ",ceiling(systime), " seconds"))
 #hist(log10LRquan)
 if(printHistPlots && length(log10LRquan)>0) {
@@ -750,107 +946,11 @@ if(writeScores) {
   rm(out);gc()
 }
 
+print("Search completed! Storing results...")
+storeResults(Ctab3)
+return(TRUE) #return successfully after completions
+
 ###################################################################################################################################
 ######################################LR CALCULATIONS DONE#########################################################################
 ###################################################################################################################################
-
-  Ctab0 <- Ctab3 #Final tab to use
-  Ctab0 <- Ctab0[order(Ctab0[,ncol(Ctab0)],decreasing=T),,drop=F] #order results
-
-	nLstain <- rowSums(!is.na(DBstainA[Ctab0[,1],,drop=F]) & !is.na(DBref[Ctab0[,2],,drop=F])) #get number of non-zero loci in both stain and reference
-	cn <- c("refBID","tarBID","refID","tarID","nLocs","MAC","nContr","LRqual","LRquan","Mx","Searchtime") #colnames
- 
-    #Create result matrix:
-	resMat <- cbind( DBrefN[Ctab0[,2], DBcolN=="BID"], DBstainN[Ctab0[,1], DBcolN=="BID"], DBrefN[Ctab0[,2], DBcolN=="ID"], DBstainN[Ctab0[,1], DBcolN=="ID"],nLstain,Ctab0[,-(1:2),drop=F],stamp)
-	colnames(resMat) <- cn
-
-    #FILTER AWAY SYMMETRIC MATCHES 
-    allSID <- cbind(resMat[,cn=="refID"],resMat[,cn=="tarID"] )
-    indrev <- as.character(allSID[, 1]) > as.character(allSID[, 2])
-    allSID[indrev, ] <- allSID[indrev, 2:1]  #sort columns
-    isdup <- duplicated(allSID) #find (redudance+symmetrical) matches already found before
-    resMat <- resMat[!isdup,,drop=F] #get only unique matches!
- 
-    #5) STORE MATCHES
-    write.table( resMat[ resMat[,cn=="refBID"]!="0",,drop=F] , file = paste0(sessionfold,"/stainmatches_", stamp, ".csv"), row.names = FALSE, sep = ";") #store matches not personell:
-    write.table( resMat[ resMat[,cn=="refBID"]=="0",,drop=F] , file = paste0(sessionfold,"/refmatches_", stamp, ".csv"), row.names = FALSE, sep = ";") #store matches only personell:
-
- 
-	matchingprofiles = function(resMat) {
-        if (length(resMat) == 0) return()
-        cn <- colnames(resMat)
-        refind <- which("refID" == cn)
-        tarind <- which("tarID" == cn)
-        refindBID <- which("refBID" == cn)
-        tarindBID <- which("tarBID" == cn)
-
-        fulltab <- numeric()
-        for (ss in 1:nrow(resMat)) {
-            refID <- resMat[ss,refind]
-            refA <- DBref[DBrefN[,DBcolN=="ID"]==refID,,drop=F][1,] #get reference data: Make robust if several refs
-            tarID <- resMat[ss,tarind]
-            tarA <- DBstainA[DBstainN[,DBcolN=="ID"]==tarID,] #get reference data
-            tarH <- DBstainH[DBstainN[,DBcolN=="ID"]==tarID,] #get reference data
-
-            nL0 = as.numeric(resMat[ss,cn=="nLocs"])
-            nL <- paste0("nLocs=",nL0)
-            mac0 = as.numeric(resMat[ss,cn=="MAC"])
-            mac <- paste0("MAC=", round(mac0,3)) #get rounded mac
-            mac2 <- paste0("MM=", round(2*nL0*(1-mac0)) ) #number of mismatches
-            mactxt = paste0(c(mac,mac2),collapse=" - ")
-
-            Khat <- paste0("nContr=", round( as.numeric(resMat[ss,cn=="nContr"]),2))
-            lr1 <- paste0("LRqual=",signif(as.numeric(resMat[ss,cn=="LRqual"]),digits=5))
-            lr2 <- paste0("LRquan=",signif(as.numeric(resMat[ss,cn=="LRquan"]),digits=5))
-		        mx <- paste0("Mx=",signif(as.numeric(resMat[ss,cn=="Mx"]),digits=3))
-            rowtab <- rbind(c(resMat[ss, refind],resMat[ss, tarind]),c(nL,mactxt),c(Khat,lr1),c(mx,lr2),c("----REFERENCE----","---------TARGET------"))
-            for (loc in locs) {
-                Pname <- as.integer(names(popFreqP[[loc]]))
-		            Ei <- paste0(tarA[loc==locs]," - ",tarH[loc==locs])
-                RPi <- as.integer(refA[loc == locs])
-                Ri <- ifelse(!is.na(RPi),paste0(names(popFreq[[loc]])[RPi%%Pname ==  0], collapse = "/"),NA)
-                if(any(is.na(Ri))) next #don't show if ref is missing
-                if(!grepl("/",Ri)) Ri <- paste0(Ri,"/",Ri)
-                rowtab <- rbind(rowtab, c(paste0(loc,": ",Ri), Ei)) #v1.4 updated
-            }
-            fulltab <- rbind(fulltab, rep(paste0("----------", ss, "----------"), 2))
-            fulltab <- rbind(fulltab, rowtab)
-            fulltab <- rbind(fulltab, rep(paste0("------------------------------"), 2))
-        }
-        return(fulltab)
-    }
-	#store details of all matches:
-    write.table(matchingprofiles(resMat), file = paste0(sessionfold,"/matchinfo_", stamp, ".csv"), col.names = FALSE,row.names = FALSE, sep = "\t")
-
-    #Number of matches:
-    print(paste0("Number of matches=", nrow(resMat)))
-	
-    #THIS BLOCK: Loads matches in matchfile. Makes sure that new matches don't duplicate with old (not even the symmetry)
-    if (!file.exists(matchfile)) { #create file if not found
-        x <- matrix(, ncol = length(cn), nrow = 0)
-        colnames(x) <- cn
-        write.table(x, file = matchfile, row.names = FALSE, col.names = TRUE, sep = ";")
-    }
-    if(length(resMat) > 0) {
-        matchlist2 <- read.table(file = matchfile, sep = ";", header = TRUE, stringsAsFactors = FALSE) 
-        cn2 <- colnames(matchlist2)
-        SID <- cbind(resMat[,cn=="refID"],resMat[,cn=="tarID"] )
-        SID2 <- cbind(matchlist2[,cn2=="refID"],matchlist2[,cn2=="tarID"] )
-
-        allSID <- rbind(SID2, SID) #combine ID from file and ID from new matches
-        allSID <- as.matrix(allSID) #vectors in matrix is already converted to factors, necessary to make string agaain!
-        indrev <- as.character(allSID[, 1]) > as.character(allSID[,2])
-        allSID[indrev, ] <- allSID[indrev, 2:1] #sort columns
-        isdup <- duplicated(allSID) #find (redudance+symmetrical) matches already found before
-        resMat2 <- resMat[!isdup[(nrow(SID2) + 1):length(isdup)], ,drop=F] #get only NEW matches!
-        print(paste0("Number of new matches=", nrow(resMat2)))
-
-        if (length(resMat2) > 0) { #only if any new matches
-           write.table(resMat2, file = matchfile, row.names = FALSE, col.names = FALSE, sep = ";", append = TRUE)
-		 if(length(resMat2)!=length(resMat) )  write.table(matchingprofiles(resMat), file = paste0(sessionfold,"/matchinfoNEW_", stamp, ".csv"), row.names = FALSE, col.names = FALSE,  sep = ";") #Only provide if different number of matches
-        } else {
-           print("NO NEW MATCHES!")
-        }
-    }
-    return(TRUE) #return successfully
 } #end dnamatch2

@@ -1,0 +1,48 @@
+Updates from v2.2.0 to v2.2.0 (31/05/20)
+ - The function for importing evidence and reference data can now be selected by the user (under 'Other setup' panel).
+ - Multi-kit compatibility:
+	 - The reference files don't need to contain all markers used in the evidence files.
+	 - Evidence profiles may have been run with several kits. 
+	 - Empty loci can now be ignored (optional). Ignoring empty loci is recommended if the evidence profiles are run with several kits.
+     - Note: If kit is selected, then only corresponding evidence profiles with same markers will be included in the search.
+ - Files within subfolders of selected folders can now be included to the search (optional).
+ - The number of optimization for the quantitative model can now be selected.
+ 
+Updates from v2.0.0 to v2.1.0
+
+ - Model Search option provided: Only MAC or MAC+Qual also possible to search.
+ - Ignore files (also folders) giving errors: Printing name of file if failed to import! Consequence: Data with wrong format may not be detected!
+ - If a file contains an error (causing importData to fail), this is recognized and a stop-message is given with info about that file. 
+        - Hence the user must fix the problem manually.
+ - Import data made more robust. Doesn't crash when:
+	- reading folders.
+	- when multiple (replicates) RID are found. 
+ - Fixed bugs:
+	- SIDptrn was not used if SIDvec or CID was not provided.
+
+Update v1.4 to v2.0:
+ - A userfriendly GUI wrapper has been added. Open with gui().
+ - The dnamatch2 function has been updated:
+	-- Added functionalities to write intermediate LR results (LRqualResults,LRquanResults).
+	-- Each run produce a log (searchLog) containing settings for the run.
+
+Update v1.3 to v1.4:
+
+Changes:
+- More details in "Match
+- The user can now write out the accepted scores from the search for each steps (MAC,qualLR,quanLR).
+ -> Set  writeScores=TRUE as argument
+- The user can set the maximum number of contributors to calculate, maxK. This can be a vector (qualLR,quanLR).
+
+Minor changes:
+- The histogram plots does not disappear when new plots are shown.
+- importFrequencies using euroformix::freqImport (require EFM v???)
+- The name of the matchfile can now be given as argument (matchfile)
+- The file with new matchinfo (matchinfoNEW) is only created if some of the matches was found in the matchfile.
+
+Made more robust:
+- AMEL not longer required in data
+
+#Potential bugs:
+-When importing data using TableReader: Use tryCatch to avoid errors. Read file only if no error.
+
