@@ -1,3 +1,7 @@
+Updates from v2.2.0 to v2.2.1 (31/05/20)
+ - An issue was fixed concerning locus lookup when loading evidence data:
+    - dnamatch2-L338: A bug occured if one locus name was a subset of another (for instance DYS389I vs DYS389II). The lookup function "grep" is now replaced by "match".
+
 Updates from v2.2.0 to v2.2.0 (31/05/20)
  - The function for importing evidence and reference data can now be selected by the user (under 'Other setup' panel).
  - Multi-kit compatibility:

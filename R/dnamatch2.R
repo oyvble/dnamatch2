@@ -335,8 +335,9 @@ dnamatch2 <- function (evidfold, freqfile, reffold = NULL, sameCID = FALSE ,betw
   			Avec <- Hvec <- rep(NA, length(locs))   #place to store allele/height-info into evidence-matrix
   			for (ii in 1:nrow(subX)) { #for each marker-row
   				loc <- subX[ii, lind]
-  				locind <- grep(loc, locs) #find correct locus
+  				locind <- match(loc, locs) #find correct locus (NB: grep causes potential MORE candidates)
   				if (length(locind) == 0)  next
+  				if (length(locind) > 1)  stop("Several locus names were observed! Please check.")
   				Ainfo <- as.character(subX[ii, Aind]) #extract allele info
   				Hinfo <- as.numeric(subX[ii, Hind]) #extract height info
   				usedInd <- !(is.na(Hinfo) | Ainfo == "" | Ainfo == "NA" | Ainfo == "OL")
