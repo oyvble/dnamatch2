@@ -1,4 +1,9 @@
-Updates from v2.2.0 to v2.2.1 (31/05/20)
+Updates from v2.2.1 to v3.0.0 (03/01/23)
+ - Requires EuroForMix v4.0.0
+ - GUI now based on gWidgets2
+ - LR values now given in bans (log10 scale)
+
+Updates from v2.2.0 to v2.2.1 (22/11/20)
  - An issue was fixed concerning locus lookup when loading evidence data:
     - dnamatch2-L338: A bug occured if one locus name was a subset of another (for instance DYS389I vs DYS389II). The lookup function "grep" is now replaced by "match".
 

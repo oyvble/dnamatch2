@@ -67,8 +67,7 @@ dnamatch2 <- function (evidfold, freqfile, reffold = NULL, sameCID = FALSE ,betw
                        nDone=4, ignoreEmptyLoci=TRUE, searchSubFoldersEvid=FALSE , searchSubFoldersRef=FALSE, importEvidFile=NULL, importRefFile=NULL) 
 {
   
-  #library(forensim) #requires v4.3
-  #library(euroformix) #v3.0.0 is recommended
+  #library(euroformix) #v4.0.0 is required
   newf0 <- minFreq #5/(2 * N) #allele-frequence for new alleles
   if (!dir.exists(sessionfold) )  dir.create(sessionfold) #create folder if not existing
   
@@ -117,7 +116,7 @@ dnamatch2 <- function (evidfold, freqfile, reffold = NULL, sameCID = FALSE ,betw
   }
   prim = as.integer(c(2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 
                       37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 
-                      101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 
+                      101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151,
                       157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 
                       223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 
                       277, 281, 283, 293, 307, 311, 313, 317, 331, 337, 347, 
@@ -566,392 +565,353 @@ dnamatch2 <- function (evidfold, freqfile, reffold = NULL, sameCID = FALSE ,betw
       }
     }
   }
-  
-######################################################################
-#Part 1: Compare number of alleles in references included in evidence#
-######################################################################
-#Create full MAC matrix: all combinations of rows in DBstainN and rows in DBrefN:
-#DBrefLocs <- rowSums(!is.na(DBref))
-print(paste0("Calculating MAC for all ",nS*nR," comparisons: All refs against all stains"))
-bigMAC <- rep(0,nS*nR) #keep MAC in a vector (sample1-ref1,sample1-ref2,...,sample2-ref1 etc.)
-#all(colnames(DBstainA)==colnames(DBref))
-
-systime <- system.time( {
-for(ss in 1:nS) { #for each sample: Limited in how the samples are looking
-#ss=2
- bigInd <-  nR*(ss-1) + 1:nR  #index in bigMAC matrix
- macS <- nLocs <- rep(0,nR) #make vector for all references 
- for(ll in 1:ncol(DBstainA)) { #for each locus: Vectorizing as much as possible!
-#ll=2
-  if(is.na(DBstainA[ss,ll]))  next #skip if no data
-  sttmp <- unlist(strsplit(DBstainA[ss,ll],"/")) #get alleles
-  sttmpP <- as.integer(names(popFreqP[[ll]][match( sttmp , names(popFreq[[ll]]) )])) #get prime numbs
-  isna <- is.na(DBref[,ll]) #get which refs are non-zero
-  numWithin <- rep(0,sum(!isna)) #number of unique alleles of reference that are in stain
-  for(aa in sttmpP) numWithin <- numWithin + as.integer(DBref[!isna,ll]%%aa==0) #for each alleles in stain
-  isHom <- sqrt(DBref[!isna,ll])
-  isHom <- abs(round(isHom) - isHom)<1e-6 #which are homozygous
-  macS[!isna] <- macS[!isna] + numWithin #add number of matching alleles
-  macS[!isna][isHom & numWithin==1] <- macS[!isna][isHom & numWithin==1] + 1 #add homozygous twice IF it was matching with one
-  nLocs[!isna] <- nLocs[!isna] + 1  #add locus  
- } #end for each locus
- bigMAC[bigInd] <- macS/(2*nLocs)  #divide number of matching-alleles in refernce by maximum possible
-#hist(macS)
- #insert MAC to long vector
- if (ss%%100 == 0)  print(paste0(round(ss/nS* 100), "% MAC calculation complete")) 
-} #end number of samples
-})[3]
-print(paste0("Calculating MAC scores took ",ceiling(systime), " seconds"))
-#End compare with MAC
-
-if(printHistPlots && length(bigMAC)>0) {
- dev.new()
- hist(bigMAC,main="Frequency of MAC score",xlab="MAC")
- abline(v=threshMAC,col=2)
- op <- par(no.readonly = TRUE)
- par(op)
-}
-#max(bigMAC)
-
-###########
-#FILTER 1:# 
-###########
-keepInd <- which(bigMAC>=threshMAC)
-#bigMAC[keepInd]
-#(1:length(bigMAC)-1)%%nR + 1
-#floor( (1:length(bigMAC)-1)/nR ) + 1
-
-Ctab <- cbind(  floor((keepInd-1)/nR) + 1, (keepInd-1)%%nR + 1 , bigMAC[keepInd]) #convert back indices
-colnames(Ctab) <- c("stain","ref","score") #note the order: stainID first
-#nR*(Ctab[,1]-1) + Ctab[,2] #check
-#cbind(DBstainN[Ctab[,1],4],DBrefN[Ctab[,2]]) #
-#Ctab <- Ctab[rowSums(is.na(DBref[Ctab[,2],]))>0,] #consider these only
-
-
-#FILTER 1b: remove for other reasons:
-#(1) Remove because it was the same stain:
-sameSID <- DBrefN[ Ctab[,2],DBcolN=="SID"]==DBstainN[ Ctab[,1],DBcolN=="SID"]  #check for mathces which have same sampleID
-Ctab <- Ctab[!sameSID,,drop=FALSE] #remove those who are the same
     
-#(2) Remove because it was the same CID
-if (!sameCID) {
- sameCID2 <- DBrefN[ Ctab[,2],DBcolN=="CID"]==DBstainN[ Ctab[,1],DBcolN=="CID"]  #check for mathces which have same sampleID
- Ctab <- Ctab[!sameCID2,,drop=FALSE] #remove those who are the same
-}
-
-#(3) Remove because it was outside time difference
-if (betweensamples && !is.null(timediff)) {
-  isREF <-  DBrefN[Ctab[,2],DBcolN=="Time"]=="0" #get samples which are ref
-  if(!all(isREF)) {
-   diff <- abs(difftime(DBrefN[Ctab[!isREF,2],DBcolN=="Time"], DBstainN[ Ctab[!isREF,1],DBcolN=="Time"], units = "days"))
-   isREF[!isREF] <- diff<=timediff #if ref-profile or inside time
-   Ctab <- Ctab[isREF,,drop=FALSE] #keep only ref-profiles or inside time
+  ######################################################################
+  #Part 1: Compare number of alleles in references included in evidence#
+  ######################################################################
+  #Create full MAC matrix: all combinations of rows in DBstainN and rows in DBrefN:
+  #DBrefLocs <- rowSums(!is.na(DBref))
+  print(paste0("Calculating MAC for all ",nS*nR," comparisons: All refs against all stains"))
+  bigMAC <- rep(0,nS*nR) #keep MAC in a vector (sample1-ref1,sample1-ref2,...,sample2-ref1 etc.)
+  #all(colnames(DBstainA)==colnames(DBref))
+  
+  systime <- system.time( {
+  for(ss in 1:nS) { #for each sample: Limited in how the samples are looking
+  #ss=2
+   bigInd <-  nR*(ss-1) + 1:nR  #index in bigMAC matrix
+   macS <- nLocs <- rep(0,nR) #make vector for all references 
+   for(ll in 1:ncol(DBstainA)) { #for each locus: Vectorizing as much as possible!
+  #ll=2
+    if(is.na(DBstainA[ss,ll]))  next #skip if no data
+    sttmp <- unlist(strsplit(DBstainA[ss,ll],"/")) #get alleles
+    sttmpP <- as.integer(names(popFreqP[[ll]][match( sttmp , names(popFreq[[ll]]) )])) #get prime numbs
+    isna <- is.na(DBref[,ll]) #get which refs are non-zero
+    numWithin <- rep(0,sum(!isna)) #number of unique alleles of reference that are in stain
+    for(aa in sttmpP) numWithin <- numWithin + as.integer(DBref[!isna,ll]%%aa==0) #for each alleles in stain
+    isHom <- sqrt(DBref[!isna,ll])
+    isHom <- abs(round(isHom) - isHom)<1e-6 #which are homozygous
+    macS[!isna] <- macS[!isna] + numWithin #add number of matching alleles
+    macS[!isna][isHom & numWithin==1] <- macS[!isna][isHom & numWithin==1] + 1 #add homozygous twice IF it was matching with one
+    nLocs[!isna] <- nLocs[!isna] + 1  #add locus  
+   } #end for each locus
+   bigMAC[bigInd] <- macS/(2*nLocs)  #divide number of matching-alleles in refernce by maximum possible
+  #hist(macS)
+   #insert MAC to long vector
+   if (ss%%100 == 0)  print(paste0(round(ss/nS* 100), "% MAC calculation complete")) 
+  } #end number of samples
+  })[3]
+  print(paste0("Calculating MAC scores took ",ceiling(systime), " seconds"))
+  #End compare with MAC
+  
+  if(printHistPlots && length(bigMAC)>0) {
+   dev.new()
+   hist(bigMAC,main="Frequency of MAC score",xlab="MAC")
+   abline(v=threshMAC,col=2)
+   op <- par(no.readonly = TRUE)
+   par(op)
   }
-}
-nK <- nrow(Ctab) #numer of comparisons to continue with
-print(paste0("Number of comparisons satisfying (after filters) threshMAC=",threshMAC,": ", nK))
-
-if(nK==0 ) { #if not more comparisons
-  print("There were no more comparisons to do after simple allele matching. Program stops!")
-  return(FALSE)
-}
-
-#Write results to file:
-if( 0 ) { #write to file only if searchoption=1 (not considered causing large files)
-  ord = order(Ctab[,3],decreasing = TRUE) #sort results
-  out = cbind( DBstainN[Ctab[,1]], DBrefN[Ctab[,2]],signif(Ctab[ord,3],3))
-  colnames(out) = c("Stain","Reference","MAC")
-  write.table(out, file = paste0(sessionfold,"/MACresults_",stamp,".csv"), row.names = FALSE, col.names = TRUE, sep = ";", append = FALSE,quote=FALSE)
-  rm(out);gc()
-} #dont 
-if( searchoption==1 ) { #write to file only if searchoption=1
-  print("Search completed! Storing results...")
-  storeResults(Ctab0=Ctab) #store results
-  return(TRUE)
-}
-
-#####################################################
-#Part 2: Calculate LRqual for relevant combinations:#
-#####################################################
-unStain <- unique(Ctab[,1]) #unique stain profiles: 
-nU <- length(unStain) #number of unique
-print(paste0("Estimating num. contr. for ", nU," stains"))
-print(paste0("Calculating LRqual for ", nK," combinations"))
-
-#2.1) Estimate number of contr. using qual model 
-logLik <- function(pDvec,joint=TRUE) { 
-          val <- numeric()
-          for(loc in names(data$popFreq)) { #for each locus
-           Ei <- NULL #get evidence
-           for(s in 1:length(data$samples)) { #fix samples
-            if(s>1) Ei <- c(Ei,0) #seperate with 0  
-            adata <- data$samples[[s]][[loc]]$adata
-            if(length(adata)==0) adata=0 #is empty
-            Ei <- c(Ei,adata)
-           } 
-           Ti <- unlist(data$refData[[loc]])
-           if( length(Ti)==0 ) Ti=NULL
-           val <- c(val , log( forensim::likEvid( Ei,T=Ti,V=NULL,x=data$nU[loc==names(data$popFreq)],theta=0, prDHet=pDvec, prDHom=pDvec^2, prC=pC, freq=data$popFreq[[loc]]) ) )
-         } #end for each markers
-         if(joint) val <- sum(val)
-         return(val)
-}
-negloglik <- function(pD) {
-	return( -logLik( pDvec=rep(1/(1+exp(-pD)),K) )) #K is outer var.
-}
-
-#New settings to make more robust optimization;
- pDv = c(0.1,0.35,0.7) #Necessary to look for potential better start point than (0.1) to make optimizer more robust
- iterlim0=5 #max number of iterations in optimization
-
-Kqual <- log10LRqual <- rep(0,nK) #for storing num. contr and logLd=log P(E|Hd)
-systime <- system.time( {
-for(ss in unStain) { #for each unique stain we estimate number of contr and calculate the LR for all the references
-# ss = unStain[1]
- dat <- DBstainA[ss,]
- locUseS <- !is.na(dat) #loci to consider for sample (only where it is data)
- if(!ignoreEmptyLoci) locUseS <- locUseS | TRUE #loci to consider for sample: Assumes kit to popFreq. Important to get correct image of whole sample
- ln = locs[locUseS] #get loci to use  in all calculations
-
- #if(any(is.na(dat))) stop("sasd")
- samples <- list(lapply(dat[locUseS], function(x) { #create sample data list
-  a0 <- unlist(strsplit(x,"/"))
-  if(all(is.na(a0))) a0 <- numeric()
-  list(adata=a0)
- })) #strsplit(dat[locUseS],"/")
- data <- euroformix::Qassignate(samples, popFreq[ln],incS=FALSE)
- data$samples <- samples
- K <- 1 #Start with one ceiling(max(sapply(dat,function(x) length( unlist(strsplit(x,"/")) )))/2) #lowest number of contr
- 
- done <- FALSE
- hdval <- matrix(NA,ncol=4,nrow=0) #columns: #contr,,dropprob,loglik_max,loglik_max-K
-
- while(!done) { #model selection for LRmix: Find MLE under hd
-      data$nU <- rep(K,length(ln)) #equal for all loci
-
-      tmp = Vectorize(negloglik)( log(pDv/(1-pDv)) )
-      pD0 = pDv[which.min(tmp)]
-
-      foo <- nlm(Vectorize(negloglik),log(pD0/(1-pD0)), iterlim=iterlim0)
-      pdhat <- 1/(1+exp(-foo$est)) #maximum likelihood dropout estimate 
-      hdval <- rbind(hdval,c(K,pdhat,-foo$min, -foo$min - K))
-      #print(hdval)
-      nval <- nrow(hdval) #obtain number of rows
-      if(nval>1 && as.numeric(hdval[nval,4]) < as.numeric(hdval[nval-1,4]) ) {
-       done <- TRUE #We keep number of contributors
-      } else {
-       if(K==maxK[1]) { #maximum was obtained 
-         done = TRUE
-       } else {
-         K <- K + 1   #Increment number of contributors if not done
-       }
-      }
+  #max(bigMAC)
+  
+  ###########
+  #FILTER 1:# 
+  ###########
+  keepInd <- which(bigMAC>=threshMAC)
+  #bigMAC[keepInd]
+  #(1:length(bigMAC)-1)%%nR + 1
+  #floor( (1:length(bigMAC)-1)/nR ) + 1
+  
+  Ctab <- cbind(  floor((keepInd-1)/nR) + 1, (keepInd-1)%%nR + 1 , bigMAC[keepInd]) #convert back indices
+  colnames(Ctab) <- c("stain","ref","score") #note the order: stainID first
+  #nR*(Ctab[,1]-1) + Ctab[,2] #check
+  #cbind(DBstainN[Ctab[,1],4],DBrefN[Ctab[,2]]) #
+  #Ctab <- Ctab[rowSums(is.na(DBref[Ctab[,2],]))>0,] #consider these only
+  
+  
+  #FILTER 1b: remove for other reasons:
+  #(1) Remove because it was the same stain:
+  sameSID <- DBrefN[ Ctab[,2],DBcolN=="SID"]==DBstainN[ Ctab[,1],DBcolN=="SID"]  #check for mathces which have same sampleID
+  Ctab <- Ctab[!sameSID,,drop=FALSE] #remove those who are the same
+      
+  #(2) Remove because it was the same CID
+  if (!sameCID) {
+   sameCID2 <- DBrefN[ Ctab[,2],DBcolN=="CID"]==DBstainN[ Ctab[,1],DBcolN=="CID"]  #check for mathces which have same sampleID
+   Ctab <- Ctab[!sameCID2,,drop=FALSE] #remove those who are the same
   }
-  indAIC <- which.max(hdval[,4]) 
-  Khat <-  hdval[indAIC,1] #estimated contr.
-  pDhat <-  hdval[indAIC,2] #estimated dropout
-  loghd <- hdval[indAIC,3] #Problem: Not always global since ref may miss some markers.
-  Kqual[ ss == Ctab[,1] ] <- Khat #estimated number used in quanLR directly (speeds up)
-  K <- Khat #NB: K is necessary variable in negloglik function
-
-  #Calc. Hp to get LR:
-  whatR <- which(ss == Ctab[,1]) #what ref ind to consider
-  subRef <- DBref[ Ctab[whatR,2], ,drop=FALSE] #get references
-
-  for(r in 1:length(whatR) ) { #for each  reference to compare with selected 
-   data$nU <- rep(Khat - 1,length(ln)) #reduce number of unknown with one under Hp! Consider as vector, values may change
-
-   #fix refData:
-   subRef2 <- subRef[r,] #get reference vector (with alleles)
-   refD <- list()
-   for(loc in ln ) {
-      pri <- subRef2[loc==locs] #get prime number
-      if(is.na(pri)) {
-        data$nU[which(loc==ln)] <- data$nU[which(loc==ln)] + 1 #add an extra unknown if missing
-#        next #skip if empty 
-	   a0 <- numeric()
-      } else {
-       an <- names(popFreq[[loc]])
-       anP <- as.integer( names(popFreqP[[loc]]) )
-       a0 <- an[pri%%anP==0]
-      }
-      if(length(a0)==1) a0 <- rep(a0,2)
-     	refD[[loc]] <- list(ref1=a0)     
-   }
-   data2 <- euroformix::Qassignate(samples, popFreq[ln],refD,incS=FALSE,incR=FALSE) #make Q-assignation for included ref
-   data$refData <- data2$refData 
-   data$popFreq <- data2$popFreq #needed to update relevant loci
-   foo <- nlm(Vectorize(negloglik),log(0.1/(1-0.1)))    #Optimize under Hp:
-   log10LRqual[whatR[r]] <- (-foo$min - loghd)/log(10) #get calculated LR
- } #end for each references given unique stain
- ii <- which(ss==unStain)  
- if (ii%%10 == 0)  print(paste0(round(ii/nU* 100), "% LR qual calculation complete")) 
-} #end for each stains
-#Kqual 
-})[3]
-print(paste0("Calculating LR (qual) took ",ceiling(systime), " seconds"))
-
-if(printHistPlots && length(log10LRqual)>0) {
- dev.new()
- hist(log10LRqual,main="Frequency of LRqual score",xlab="log10LR")
- abline(v=log10(threshLR[1]),col=2)
- op <- par(no.readonly = TRUE)
- par(op)
-}
-
-###########
-#FILTER 2:# 
-###########
-keepInd2 <- which(log10LRqual>=log10(threshLR[1]))
-Ctab2 <- cbind(Ctab[keepInd2,,drop=F], Kqual[keepInd2], 10^log10LRqual[keepInd2]) #include LRqual (on original scale)
-nK2 <- nrow(Ctab2) #update nK (number of combinations)
-print(paste0("Number of comparisons satisfying threshLRqual>",threshLR[1],": ", nK2))
-
-if(nK2==0) {
-  print("There were no more comparisons to do after qualitative comparison. Program stops!")
-  return(FALSE)  
-}
-
-if(writeScores && searchoption>2 ) { #if write temporary scorings
-  out = cbind( DBstainN[Ctab2[,1]], DBrefN[Ctab2[,2]],round(Ctab2[,3],3),Ctab2[,4],signif(Ctab2[,5],5))
-  colnames(out) = c("Stain","Reference","MAC","nContr","LRqual")
-  write.table(out, file = paste0(sessionfold,"/LRqualResults_",stamp,".csv"), row.names = FALSE, col.names = TRUE, sep = ";", append = FALSE,quote=FALSE)
-  rm(out);gc()
-}
-if(searchoption==2) {
-  print("Search completed! Storing results...")
-  storeResults(Ctab0=Ctab2) #store results and stop program
-  return(TRUE)
-}
-
-#####################################################
-#Part 3: Calculate LRquan for relevant combinations:#
-#####################################################
-#Using estimated contr. in Kqual for quan LR:
-#ALSO IT REQUIRES ALL MARKERS FOR REFERENCES: ADVANCED NOT IMPLEMENTED!
-log10LRquan <- mxhat <- rep(0,nK2) #store LR and mx
-unStain <- unique(Ctab2[,1]) #unique stain profiles
-nU <- length(unStain) #number of unique stains
-
-print(paste0("Calculating LRquan for ", nK2," combinations (",nU," unique samples)"))
-
-if( !is.null(kit) ) { #if kit is specified (degrad model)
-  kitinfo = euroformix::getKit(kit)
-  if(length(kitinfo)==1) {
-    print("Kit was not recognized. Please specify a valid kit to use the degradation model.")
-  } else {
-    if( !all( toupper(locs)%in%toupper(unique(kitinfo$Marker)) ) ) {
-      print("The user has specified markers which was not recognized in the getKit function. Please rename marker names in order to use degradation model!")
-      return(FALSE) #return from function
+  
+  #(3) Remove because it was outside time difference
+  if (betweensamples && !is.null(timediff)) {
+    isREF <-  DBrefN[Ctab[,2],DBcolN=="Time"]=="0" #get samples which are ref
+    if(!all(isREF)) {
+     diff <- abs(difftime(DBrefN[Ctab[!isREF,2],DBcolN=="Time"], DBstainN[ Ctab[!isREF,1],DBcolN=="Time"], units = "days"))
+     isREF[!isREF] <- diff<=timediff #if ref-profile or inside time
+     Ctab <- Ctab[isREF,,drop=FALSE] #keep only ref-profiles or inside time
     }
   }
-}
-
-#Notice: Empty markers important because of information about allele dropouts.
-systime <- system.time( {
-for(ss in unStain) { #for each unique stain we estimate number of contr.
-# ss = unStain[1]
- datA <- DBstainA[ss,]
- datH <- DBstainH[ss,] #get peak heights
-
- #Specifying which markers to use:
- locUseS <- !is.na(datA) #loci to consider for sample: Assumes kit to popFreq. Important to get correct image of whole sample
- if(!ignoreEmptyLoci) locUseS <- locUseS | TRUE #loci to consider for sample: Assumes kit to popFreq. Important to get correct image of whole sample
- ln = locs[locUseS] #get loci to use
- 
- samples <- list()
- for(loc in ln) {
-  ind <- which(locs==loc)
-  a0 <- unlist(strsplit(datA[ind],"/"))
-  h0 <- as.numeric(unlist(strsplit(datH[ind],"/")))
-  if(is.na(datA[ind])) a0 <- h0 <- numeric()
-  samples[[loc]] <- list(adata=a0,hdata=h0)
- }
- samples <- list(samples) #select only loci to use
- 
- data <- euroformix::Qassignate(samples, popFreq=popFreq[ ln ],incS=FALSE) #don't include stutters
- nC <- Kqual[ ss == Ctab[,1] ][1] #number of contr as for qual model
- if(length(maxK)>1) nC = min(nC,maxK[2]) #use minimum of these if maxK specified for quan
-
- fitHd <- euroformix::contLikMLE(nC,samples,data$popFreq,xi=0,prC=pC,lambda=lambda,nDone=nDone,threshT=threshHeight,kit=kit,verbose=FALSE)
- #fitHd$fit$thetahat2
- loghd <- fitHd$fit$loglik #used under all combination for this stain.
-
-  #Calc. Hp to get LR:
-  whatR <- which(ss == Ctab2[,1]) #what ref ind to consider
-  subRef <- DBref[ Ctab2[whatR,2], ,drop=F] #get references
-  for(r in 1:length(whatR) ) { #for each references
-#r=1
-   #fix refData:
-   subRef2 <- subRef[r,]
-   refD <- list()
-   for(loc in ln) { #for each loci (selected)
-      pri <- subRef2[loc==locs] #get prime number
-      if(is.na(pri)) {
-	   a0 <- numeric() #if empty
-      } else {
-       an <- names(popFreq[[loc]])
-       anP <- as.integer( names(popFreqP[[loc]]) )
-       a0 <- an[pri%%anP==0]
-       if(length(a0)==1) a0 <- rep(a0,2)
+  nK <- nrow(Ctab) #numer of comparisons to continue with
+  print(paste0("Number of comparisons satisfying (after filters) threshMAC=",threshMAC,": ", nK))
+  
+  if(nK==0 ) { #if not more comparisons
+    print("There were no more comparisons to do after simple allele matching. Program stops!")
+    return(FALSE)
+  }
+  
+  #Write results to file:
+  if( 0 ) { #write to file only if searchoption=1 (not considered causing large files)
+    ord = order(Ctab[,3],decreasing = TRUE) #sort results
+    out = cbind( DBstainN[Ctab[,1]], DBrefN[Ctab[,2]],signif(Ctab[ord,3],3))
+    colnames(out) = c("Stain","Reference","MAC")
+    write.table(out, file = paste0(sessionfold,"/MACresults_",stamp,".csv"), row.names = FALSE, col.names = TRUE, sep = ";", append = FALSE,quote=FALSE)
+    rm(out);gc()
+  } #dont 
+  if( searchoption==1 ) { #write to file only if searchoption=1
+    print("Search completed! Storing results...")
+    storeResults(Ctab0=Ctab) #store results
+    return(TRUE)
+  }
+  
+  #####################################################
+  #Part 2: Calculate LRqual for relevant combinations:#
+  #####################################################
+  unStain <- unique(Ctab[,1]) #unique stain profiles: 
+  nU <- length(unStain) #number of unique
+  print(paste0("Estimating num. contr. for ", nU," stains"))
+  print(paste0("Calculating LRqual for ", nK," combinations"))
+  
+  #2.1) Estimate number of contr. using qual model 
+  #New settings to make more robust optimization;
+  maxIter = 5 #max number of iterations in optimization
+  
+  Kqual <- log10LRqual <- rep(0,nK) #for storing num. contr and logLd=log P(E|Hd)
+  systime <- system.time( {
+  for(ss in unStain) { #for each unique stain we estimate number of contr and calculate the LR for all the references
+  # ss = unStain[1]
+   dat <- DBstainA[ss,]
+   locUseS <- !is.na(dat) #loci to consider for sample (only where it is data)
+   if(!ignoreEmptyLoci) locUseS <- locUseS | TRUE #loci to consider for sample: Assumes kit to popFreq. Important to get correct image of whole sample
+   ln = locs[locUseS] #get loci to use  in all calculations
+  
+   #if(any(is.na(dat))) stop("sasd")
+   samples <- list(sample=lapply(dat[locUseS], function(x) { #create sample data list
+    a0 <- unlist(strsplit(x,"/"))
+    if(all(is.na(a0))) a0 <- numeric()
+    list(adata=a0)
+   })) #strsplit(dat[locUseS],"/")
+   data <- euroformix::Qassignate(samples, popFreq[ln],incS=FALSE)
+   
+   #Optimization:
+   K <- 1 #Start with one ceiling(max(sapply(dat,function(x) length( unlist(strsplit(x,"/")) )))/2) #lowest number of contr
+   done <- FALSE
+   hdval <- matrix(NA,ncol=4,nrow=0) #columns: #contr,,dropprob,loglik_max,loglik_max-K
+   while(!done) { #model selection for LRmix: Find MLE under hd
+    data$nU <- rep(K,length(ln)) #equal for all loci
+    foo = euroformix::calcQualMLE(K,data$samples,data$popFreq,prC=pC,maxIter = maxIter) #max number of iterations
+    hdval <- rbind(hdval,c(K,foo$pDhat,foo$loglik, foo$loglik - K)) #append to table
+    #print(hdval)
+    nval <- nrow(hdval) #obtain number of rows
+    if(nval>1 && as.numeric(hdval[nval,4]) < as.numeric(hdval[nval-1,4]) ) {
+     done <- TRUE #We keep number of contributors
+    } else {
+     if(K==maxK[1]) { #maximum was obtained 
+       done = TRUE
+     } else {
+       K <- K + 1   #Increment number of contributors if not done
+     }
+    }
+    }
+    indAIC <- which.max(hdval[,4]) 
+    Khat <-  hdval[indAIC,1] #estimated contr.
+    pDhat <-  hdval[indAIC,2] #estimated dropout
+    loghd <- hdval[indAIC,3] #Problem: Not always global since ref may miss some markers.
+    Kqual[ ss == Ctab[,1] ] <- Khat #estimated number used in quanLR directly
+    
+    #Calc. Hp to get LR:
+    whatR <- which(ss == Ctab[,1]) #what ref ind to consider
+    subRef <- DBref[ Ctab[whatR,2], ,drop=FALSE] #get references
+  
+    for(r in 1:length(whatR) ) { #for each  reference to compare with selected 
+     #fix refData:
+     subRef2 <- subRef[r,] #get reference vector (with alleles)
+     refD <- list()
+     for(loc in ln ) {
+        pri <- subRef2[loc==locs] #get prime number
+        if(is.na(pri)) {
+  	     a0 <- numeric()
+        } else {
+         an <- names(popFreq[[loc]])
+         anP <- as.integer( names(popFreqP[[loc]]) )
+         a0 <- an[pri%%anP==0]
+        }
+        av2 = names(data$popFreq[[loc]]) #obtain alleles used in evaluation
+        if(length(a0)==1) a0 <- rep(a0,2)
+       	refD[[loc]] <- list(ref1=a0)     
+     }
+     data = euroformix::Qassignate(samples, popFreq[ln],refD,incS=FALSE,incR=FALSE)
+     foo = euroformix::calcQualMLE(Khat,data$samples,data$popFreq,data$refData,condOrder=1, prC=pC,maxIter = maxIter) #max number of iterations
+     log10LRqual[whatR[r]] = (foo$loglik - loghd)/log(10) #get calculated LR
+   } #end for each references given unique stain
+   ii <- which(ss==unStain)  
+   if (ii%%10 == 0)  print(paste0(round(ii/nU* 100), "% LR qual calculation complete")) 
+  } #end for each stains
+  #Kqual 
+  })[3]
+  print(paste0("Calculating LR (qual) took ",ceiling(systime), " seconds"))
+  
+  if(printHistPlots && length(log10LRqual)>0) {
+   dev.new()
+   hist(log10LRqual,main="Frequency of LRqual score",xlab="log10LR")
+   abline(v=log10(threshLR[1]),col=2)
+   op <- par(no.readonly = TRUE)
+   par(op)
+  }
+  
+  ###########
+  #FILTER 2:# 
+  ###########
+  keepInd2 <- which(log10LRqual>=log10(threshLR[1]))
+  Ctab2 <- cbind(Ctab[keepInd2,,drop=F], Kqual[keepInd2], log10LRqual[keepInd2]) #include LRqual (on original scale)
+  nK2 <- nrow(Ctab2) #update nK (number of combinations)
+  print(paste0("Number of comparisons satisfying threshLRqual>",threshLR[1],": ", nK2))
+  
+  if(nK2==0) {
+    print("There were no more comparisons to do after qualitative comparison. Program stops!")
+    return(FALSE)  
+  }
+  
+  if(writeScores && searchoption>2 ) { #if write temporary scorings
+    out = cbind( DBstainN[Ctab2[,1]], DBrefN[Ctab2[,2]],round(Ctab2[,3],3),Ctab2[,4],round(Ctab2[,5],3))
+    colnames(out) = c("Stain","Reference","MAC","nContr","LRqual")
+    write.table(out, file = paste0(sessionfold,"/LRqualResults_",stamp,".csv"), row.names = FALSE, col.names = TRUE, sep = ";", append = FALSE,quote=FALSE)
+    rm(out);gc()
+  }
+  if(searchoption==2) {
+    print("Search completed! Storing results...")
+    storeResults(Ctab0=Ctab2) #store results and stop program
+    return(TRUE)
+  }
+  
+  #####################################################
+  #Part 3: Calculate LRquan for relevant combinations:#
+  #####################################################
+  #Using estimated contr. in Kqual for quan LR:
+  #ALSO IT REQUIRES ALL MARKERS FOR REFERENCES: ADVANCED NOT IMPLEMENTED!
+  log10LRquan <- mxhat <- rep(0,nK2) #store LR and mx
+  unStain <- unique(Ctab2[,1]) #unique stain profiles
+  nU <- length(unStain) #number of unique stains
+  
+  print(paste0("Calculating LRquan for ", nK2," combinations (",nU," unique samples)"))
+  
+  useDEG = FALSE #whether Degradation model should be used or not
+  if( !is.null(kit) ) { #if kit is specified (degrad model)
+    kitinfo = euroformix::getKit(kit)
+    if(length(kitinfo)==1) {
+      print("Kit was not recognized. Please specify a valid kit to use the degradation model.")
+    } else {
+      if( !all( toupper(locs)%in%toupper(unique(kitinfo$Marker)) ) ) {
+        print("The user has specified markers which was not recognized in the getKit function. Please rename marker names in order to use degradation model!")
+        return(FALSE) #return from function
       }
-    	refD[[loc]] <- list(ref1=a0)     
+    }
+    useDEG = TRUE
+  }
+  
+  #Notice: Empty markers important because of information about allele dropouts.
+  systime <- system.time( {
+  for(ss in unStain) { #for each unique stain we estimate number of contr.
+  # ss = unStain[1]
+   datA <- DBstainA[ss,]
+   datH <- DBstainH[ss,] #get peak heights
+  
+   #Specifying which markers to use:
+   locUseS <- !is.na(datA) #loci to consider for sample: Assumes kit to popFreq. Important to get correct image of whole sample
+   if(!ignoreEmptyLoci) locUseS <- locUseS | TRUE #loci to consider for sample: Assumes kit to popFreq. Important to get correct image of whole sample
+   ln = locs[locUseS] #get loci to use
+   
+   #Obtain assumed number of contibutors:
+   nC <- Kqual[ ss == Ctab[,1] ][1] #number of contr as for qual model
+   if(length(maxK)>1) nC = min(nC,maxK[2]) #use minimum of these if maxK specified for quan
+   
+   samples <- list()
+   for(loc in ln) {
+    ind <- which(locs==loc)
+    a0 <- unlist(strsplit(datA[ind],"/"))
+    h0 <- as.numeric(unlist(strsplit(datH[ind],"/")))
+    if(is.na(datA[ind])) a0 <- h0 <- numeric()
+    samples[[loc]] <- list(adata=a0,hdata=h0)
    }
-   #locUseR <- names(popFreq)%in%names(refD) #loci in ref.
-   data2 <- euroformix::Qassignate(samples, popFreq[ln],refD,incS=FALSE,incR=FALSE) #popFreq must be given with correct order?
-   data$refData <- data2$refData 
-   data$popFreq <- data2$popFreq #needed to update relevant loci
-
-   #Optimize under Hp:
-   fitHp <- euroformix::contLikMLE(nC,samples,data$popFreq,data$refData,condOrder=1,xi=0,prC=pC,lambda=lambda,nDone=nDone,threshT=threshHeight,kit=kit,verbose=FALSE)
-   mxhat[whatR[r]] <- fitHp$fit$thetahat2[1]
-
-   #Optimized Values under Hd:
-   log10LRquan[whatR[r]] <- (fitHp$fit$loglik  - loghd)/log(10) 
- } #end for each references given unique stain
- ii <- which(ss==unStain)  
- if (ii%%5 == 0)  print(paste0(round(ii/nU* 100), "% LR quan calculation complete")) 
-} #end for each stains
-})[3]
-
-print(paste0("Calculating LR (quan) took ",ceiling(systime), " seconds"))
-#hist(log10LRquan)
-if(printHistPlots && length(log10LRquan)>0) {
- dev.new()
- hist(log10LRquan,main="Frequency of LRquan score",xlab="log10LR")
- thresh = threshLR
- if(length(threshLR)>1) thresh = threshLR[2]
- abline(v=log10(thresh),col=2)
- op <- par(no.readonly = TRUE)
- par(op)
-}
-
-###########
-#FILTER 3:# 
-###########
-threshQuan <- threshLR[1]
-if(length(threshLR)>1) threshQuan <- threshLR[2]
-keepInd3 <- which(log10LRquan>=log10(threshQuan))
-Ctab3 <- cbind(Ctab2[keepInd3,,drop=F], 10^log10LRquan[keepInd3],mxhat[keepInd3]) #include LRquan (on original scale)
-nK3 <- nrow(Ctab3)
-print(paste0("Number of comparisons satisfying threshLRquan>",threshQuan,": ", nK3))
-if(nK3==0) {
-  print("There were no match candidates. Program stops!")
-  return(FALSE)
-} 
-
-if(writeScores) {
-  out = cbind( DBstainN[Ctab3[,1]], DBrefN[Ctab3[,2]],round(Ctab3[,3],3),Ctab3[,4],signif(Ctab3[,5],5),signif(Ctab3[,6],5),signif(Ctab3[,7],3))
-  colnames(out) = c("Stain","Reference","MAC","nContr","LRqual","LRquan","Mx")
-  write.table(out, file = paste0(sessionfold,"/LRquanResults_",stamp,".csv"), row.names = FALSE, col.names = TRUE, sep = ";", append = FALSE,quote=FALSE)
-  rm(out);gc()
-}
-
-print("Search completed! Storing results...")
-storeResults(Ctab3)
-return(TRUE) #return successfully after completions
-
-###################################################################################################################################
-######################################LR CALCULATIONS DONE#########################################################################
-###################################################################################################################################
+   samples <- list(sample=samples) #select only loci to use
+  
+   #Fit under Hd:
+   data <- euroformix::Qassignate(samples, popFreq=popFreq[ ln ],incS=FALSE) #don't include stutters
+   fitHd <- euroformix::calcMLE(nC,data$samples,data$popFreq, DEG = useDEG,BWS = FALSE, FWS = FALSE, pC=pC,lambda=lambda,nDone=nDone,AT=threshHeight,kit=kit,verbose=FALSE)
+   loghd <- fitHd$fit$loglik #used under all combination for this stain.
+  
+    #Calc. Hp to get LR:
+    whatR <- which(ss == Ctab2[,1]) #what ref ind to consider
+    subRef <- DBref[ Ctab2[whatR,2], ,drop=F] #get references
+    for(r in 1:length(whatR) ) { #for each references
+  #r=1
+     #fix refData:
+     subRef2 <- subRef[r,]
+     refD <- list()
+     for(loc in ln) { #for each loci (selected)
+        pri <- subRef2[loc==locs] #get prime number
+        if(is.na(pri)) {
+  	     a0 <- numeric() #if empty
+        } else {
+         an <- names(popFreq[[loc]])
+         anP <- as.integer( names(popFreqP[[loc]]) )
+         a0 <- an[pri%%anP==0]
+         if(length(a0)==1) a0 <- rep(a0,2)
+        }
+      	refD[[loc]] <- list(ref1=a0)     
+     }
+     #locUseR <- names(popFreq)%in%names(refD) #loci in ref.
+     data <- euroformix::Qassignate(samples, popFreq[ln],refD,incS=FALSE,incR=FALSE) #popFreq must be given with correct order?
+     fitHp <- euroformix::calcMLE(nC,data$samples,data$popFreq, data$refData,condOrder=1, DEG = useDEG,BWS = FALSE, FWS = FALSE, pC=pC,lambda=lambda,nDone=nDone,AT=threshHeight,kit=kit,verbose=FALSE)
+     mxhat[whatR[r]] <- fitHp$fit$thetahat2[1] #obtain mixture proportions
+  
+     #Optimized Values under Hd:
+     log10LRquan[whatR[r]] <- (fitHp$fit$loglik  - loghd)/log(10) 
+   } #end for each references given unique stain
+   ii <- which(ss==unStain)  
+   if (ii%%5 == 0)  print(paste0(round(ii/nU* 100), "% LR quan calculation complete")) 
+  } #end for each stains
+  })[3]
+  
+  print(paste0("Calculating LR (quan) took ",ceiling(systime), " seconds"))
+  #hist(log10LRquan)
+  if(printHistPlots && length(log10LRquan)>0) {
+   dev.new()
+   hist(log10LRquan,main="Frequency of LRquan score",xlab="log10LR")
+   thresh = threshLR
+   if(length(threshLR)>1) thresh = threshLR[2]
+   abline(v=log10(thresh),col=2)
+   op <- par(no.readonly = TRUE)
+   par(op)
+  }
+  
+  ###########
+  #FILTER 3:# 
+  ###########
+  threshQuan <- threshLR[1]
+  if(length(threshLR)>1) threshQuan <- threshLR[2]
+  keepInd3 <- which(log10LRquan>=log10(threshQuan))
+  Ctab3 <- cbind(Ctab2[keepInd3,,drop=F], log10LRquan[keepInd3],mxhat[keepInd3]) #include LRquan (on original scale)
+  nK3 <- nrow(Ctab3)
+  print(paste0("Number of comparisons satisfying threshLRquan>",threshQuan,": ", nK3))
+  if(nK3==0) {
+    print("There were no match candidates. Program stops!")
+    return(FALSE)
+  } 
+  
+  if(writeScores) {
+    out = cbind( DBstainN[Ctab3[,1]], DBrefN[Ctab3[,2]],round(Ctab3[,3],3),Ctab3[,4],signif(Ctab3[,5],5),round(Ctab3[,6],3),signif(Ctab3[,7],3))
+    colnames(out) = c("Stain","Reference","MAC","nContr","LRqual","LRquan","Mx")
+    write.table(out, file = paste0(sessionfold,"/LRquanResults_",stamp,".csv"), row.names = FALSE, col.names = TRUE, sep = ";", append = FALSE,quote=FALSE)
+    rm(out);gc()
+  }
+  
+  print("Search completed! Storing results...")
+  storeResults(Ctab3)
+  return(TRUE) #return successfully after completions
 } #end dnamatch2

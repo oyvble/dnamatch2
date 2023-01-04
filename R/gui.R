@@ -5,16 +5,13 @@
 #' @param envirfile A file to a saved environment of a project
 #' @export
 
-#envirfile=NULL
+#library(dnamatch2);envirfile=NULL
+#library(dnamatch2);gui()
 
 gui= function(envirfile=NULL) {
  #size of main window
- mwH <- 800
- mwW <- 1000
-
+ 
  #Required for GUI:
- require(gWidgetstcltk) #requires only gWidgets.
-
  #type of gwidgets-kit
  options(guiToolkit="tcltk")
 
@@ -25,6 +22,7 @@ gui= function(envirfile=NULL) {
  softname <- paste0("dnamatch2 v",version)
 
  #Spacing between widgets
+ maxlen_box = 250 #max lenght of dropdown box (shouldnt exceed 1080p screen)
  spc <- 5
  emptyName = "none" #Text Indicate that nothing is selected
  longspace = "                                                                                 "
@@ -39,6 +37,13 @@ gui= function(envirfile=NULL) {
  #HELPFUNCTIONS#
  ###############
 
+ #This function is written since the encoding in  gWidgets2::gfile is fixed to UTF-8 which doesn't handle special letters
+ mygfile <- function(text,type,filter=list(),initf=NULL) { #Possible bug: text ignored when type="selectdir"
+   file <- gWidgets2::gfile(text=text,type=type,filter=filter,initial.filename=initf)
+   Encoding(file ) <- options()$encoding #Set default to local encoder: Makes it possible to use Language-text files in own language
+   return(file)
+ }
+ 
  #helpfunction to get environment and file name for different data types
  getEnvirFileNames = function(type="EVID") {
    if(type=="EVID") {
@@ -118,7 +123,7 @@ gui= function(envirfile=NULL) {
    #dat = scan(file=setupFile,what=character(),quiet=TRUE,sep="\n")
    dat = readLines(setupFile)
    if(length(dat)!=length(GLOBAL_vars)) {
-     gWidgets::gmessage(message="Something was wrong with the config setting file. Please contact developer for advice!",title="Corrupt config file",icon="error")
+     gWidgets2::gmessage("Something was wrong with the config setting file. Please contact developer for advice!",title="Corrupt config file",icon="error")
      stop("Non-compatible config file")     
    }
    opt = list() #init list
@@ -139,44 +144,44 @@ gui= function(envirfile=NULL) {
  #helpfunction which checks that at value is in interval of [0,1]
  checkProb = function(x,what) {
   if(x < 0 || x>1) {
-   gWidgets::gmessage(message=paste0(what," must be specified in interval [0,1] "),title="Wrong input",icon="error")
+   gWidgets2::gmessage(paste0(what," must be specified in interval [0,1] "),title="Wrong input",icon="error")
    stop("Wrong user-input")
   }
   return(x)
  }
  checkPositive = function(x,what,strict=FALSE) {
   if(x < 0 ) {
-   gWidgets::gmessage(message=paste0(what," cannot be a negative number"),title="Wrong input",icon="error")
+   gWidgets2::gmessage(paste0(what," cannot be a negative number"),title="Wrong input",icon="error")
    stop("Wrong user-input")
   }
   if(strict && x==0) {
-   gWidgets::gmessage(message=paste0(what," cannot be zero"),title="Wrong input",icon="error")
+   gWidgets2::gmessage(paste0(what," cannot be zero"),title="Wrong input",icon="error")
    stop("Wrong user-input")
   }
   return(x)
  }
  checkPosInteger = function(x,what,strict=TRUE) {
   if(x < 1 || round(x)!=x ) {
-   gWidgets::gmessage(message=paste0(what," must be a positive integer"),title="Wrong input",icon="error")
+   gWidgets2::gmessage(paste0(what," must be a positive integer"),title="Wrong input",icon="error")
    stop("Wrong user-input")
   }
   if(strict && x==0) {
-   gWidgets::gmessage(message=paste0(what," cannot be zero"),title="Wrong input",icon="error")
+   gWidgets2::gmessage(paste0(what," cannot be zero"),title="Wrong input",icon="error")
    stop("Wrong user-input")
   }
   return(x)
  }
  val = function(wid) { #helpfunction to get value from widget
-  tmp = as.numeric(gWidgets::svalue(wid))
+  tmp = as.numeric(gWidgets2::svalue(wid))
   if(is.na(tmp )) {
-   gWidgets::gmessage(paste0("Text found where number was expected:\n",gWidgets::svalue(wid)))
+   gWidgets2::gmessage(paste0("Text found where number was expected:\n",gWidgets2::svalue(wid)))
    return()
   }
   return(tmp )
  }
 
  errorMessage = function(msg) {  #Helpfunction to throw error message to user + stop running 
-  gWidgets::gmessage(msg,title="Error",icon="error")
+  gWidgets2::gmessage(msg,title="Error",icon="error")
   stop(msg)
  }
 
@@ -211,7 +216,7 @@ gui= function(envirfile=NULL) {
   if(kitUse==emptyName) kitUse = NULL #Set back to NULL if none specified
 
   if(opt$ignoreEmptyLoci) {
-    bool = gWidgets::gconfirm("The option 'Ignore empty markers' should only be used if some of the evidence profiles contains different markers (i.e. run with different kits). Do you want to continue?")
+    bool = gWidgets2::gconfirm("The option 'Ignore empty markers' should only be used if some of the evidence profiles contains different markers (i.e. run with different kits). Do you want to continue?")
     if(!bool) return() #don't search if user not agreeing
   }
   
@@ -259,7 +264,7 @@ gui= function(envirfile=NULL) {
   	importRefFile = importRefFile
    )
   
-  if(!status) gWidgets::gmessage("Search completed:\nNo match candidates were found!")
+  if(!status) gWidgets2::gmessage("Search completed:\nNo match candidates were found!")
 
    #Step 3: Show graph of match candidates
    if(status && require(igraph) && opt$printGraph) { 
@@ -374,7 +379,7 @@ gui= function(envirfile=NULL) {
    opt$printHistPlots = TRUE
    opt$writeScores = TRUE
    opt$maxKqual=4 #max number of contributors under QUAL
-   opt$maxKquan=3 #max number of contributors under QUAN
+   opt$maxKquan=4 #max number of contributors under QUAN
    opt$matchfile="matchfile.csv" #file name for storing results
    opt$sessionfold ="session" #folder name for storing results
    
@@ -399,7 +404,7 @@ gui= function(envirfile=NULL) {
    
    optL = get("setup",envir=mmTK)  #receive settings from envir (preassigned or from file)
    if( any( !GLOBAL_vars%in%names(optL) ) ) {
-     gWidgets::gmessage(message="The project save file was not compatible with this software version!",title="Wrong version",icon="error")
+     gWidgets2::gmessage("The project save file was not compatible with this software version!",title="Wrong version",icon="error")
      return()
    }
    
@@ -409,72 +414,80 @@ gui= function(envirfile=NULL) {
 ###########################GUI#####################################
 ###################################################################
 
- #Menu bar file-lists:
- f_setwd = function(h,...) {
-  dirsel = gWidgets::gfile(text="Select folder",type="selectdir")
-  if(!is.na(dirsel)) {
-   setwd(dirsel)
-   opt = get("setup",envir=mmTK) #get
-   opt$workdir = dirsel
-   assign("setup",opt,envir=mmTK) #set
-  }
- }
- f_openproj = function(h,...) {
-  projfile = gWidgets::gfile(text="Open settings",type="open")
-  if(!is.na(projfile)) {
-   gWidgets::dispose(mainwin)
-   dnamatch2::gui(projfile) #send environment into program
-  }
- }
- f_saveproj = function(h,...) {
-  projfile = gWidgets::gfile(text="Save settings",type="save")
-  if(!is.na(projfile)) {
-   save(mmTK,file=projfile) #save environment
-   print(paste("Settings saved in ",projfile,sep=""))
-  }
- }
-
- #helpfunction for adding folder/ID when clicking button
-  f_addFolder = function(h,...) {
-    dirfile = gWidgets::gfile(text="Select folder",type="selectdir")
-    if(!is.na(dirfile)) {
-      fv = addFold(foldadd=dirfile,h$action) #Add folder to environment and file, h=list(action="EVID")
-      if(h$action=="EVID") {
-        tab2a[1,2][] = fv #update combolist
-        gWidgets::enabled(tab2a[2,1]) = TRUE
-      }
-      if(h$action=="REF") {
-        tab2b[1,2][] = fv #update combolist
-        gWidgets::enabled(tab2b[2,1]) = TRUE
-      }
+  #Menu bar file-lists:
+  f_setwd = function(h,...) {
+    dirsel = mygfile(text="Select folder",type="selectdir")
+    if(!is.na(dirsel)) {
+     setwd(dirsel)
+     opt = get("setup",envir=mmTK) #get
+     opt$workdir = dirsel
+     assign("setup",opt,envir=mmTK) #set
     }
+  }
+  f_openproj = function(h,...) {
+    projfile = mygfile(text="Open settings",type="open")
+    if(length(projfile)==0) return()
+    gWidgets2::dispose(mainwin)
+    dnamatch2::gui(projfile) #send environment into program
+    }
+    f_saveproj = function(h,...) {
+    projfile = mygfile(text="Save settings",type="save")
+    if(length(projfile)==0) return()
+    save(mmTK,file=projfile) #save environment
+    print(paste("Settings saved in ",projfile,sep=""))
+  }
+  
+ #helpfunction for adding folder/ID when clicking button
+  #  h = list(action="EVID")
+  f_addFolder = function(h,...) {
+    dirfile = mygfile(text="Select folder",type="selectdir")
+    if(length(dirfile)==0) return()
+    items = addFold(foldadd=dirfile,h$action) #Add folder to environment and file, h=list(action="EVID")
+    setwidget = function(widget) {
+      widget[1,2][] = items #update combolist
+      gWidgets2::enabled(widget[2,1]) = TRUE
+      gWidgets2::size(widget[1,2]) = min(max(nchar(items)),maxlen_box)
+      gWidgets2::svalue(widget[1,2]) = items[length(items)]
+    }
+    if(h$action=="EVID") setwidget(tab2a)
+    if(h$action=="REF") setwidget(tab2b)
   }
   f_addID = function(h,...) {
     if(grepl("sel",h$action)) txt = "Insert ID to add for searching (include prefix)"
     if(grepl("pat",h$action)) txt = "Insert prefix pattern for recognizion"
-    idADD = gWidgets::ginput(message=txt)
+    idADD = gWidgets2::ginput(txt)
     if( is.na(idADD) || idADD==FALSE || idADD=="") return() #no input given
 
-    fv = addFold(foldadd=idADD,h$action) #Add folder to environment and file, h=list(action="EVID")
+    items = addFold(foldadd=idADD,h$action) #Add folder to environment and file, h=list(action="EVID")
     if(h$action=="SIDsel") {
-      tab2c[1,2][] = fv #update combolist
-      gWidgets::enabled(tab2c[2,2]) = TRUE
+      tab2c[1,2][] = items #update combolist
+      gWidgets2::enabled(tab2c[2,2]) = TRUE
+      gWidgets2::size(tab2c[1,2]) = min(max(nchar(items)),maxlen_box)
+      gWidgets2::svalue(tab2c[1,2]) = items[length(items)]
     }
     if(h$action=="BIDsel") {
-      tab2d[1,2][] = fv #update combolist
-      gWidgets::enabled(tab2d[2,2]) = TRUE
+      tab2d[1,2][] = items #update combolist
+      gWidgets2::enabled(tab2d[2,2]) = TRUE
+      gWidgets2::size(tab2d[1,2]) = min(max(nchar(items)),maxlen_box)
+      gWidgets2::svalue(tab2d[1,2]) = items[length(items)]
     }
     if(h$action=="CIDsel") {
-      tab2f[1,2][] = fv #update combolist
-      gWidgets::enabled(tab2f[2,2]) = TRUE
+      tab2f[1,2][] = items #update combolist
+      gWidgets2::enabled(tab2f[2,2]) = TRUE
+      gWidgets2::size(tab2f[1,2]) = min(max(nchar(items)),maxlen_box)
+      gWidgets2::svalue(tab2f[1,2]) = items[length(items)]
     }
     if(h$action=="SIDpat") {
-      tab4b[1,2][] = fv #update combolist
-      gWidgets::enabled(tab4b[2,2]) = TRUE
+      tab4b[1,2][] = items #update combolist
+      gWidgets2::enabled(tab4b[2,2]) = TRUE
+      gWidgets2::size(tab4b[1,2]) = min(max(nchar(items)),maxlen_box)
+      gWidgets2::svalue(tab4b[1,2]) = items[length(items)]
     }
     if(h$action=="BIDpat") {
-      tab4c[1,2][] = fv #update combolist
-      gWidgets::enabled(tab4c[2,2]) = TRUE
+      tab4c[1,2][] = items #update combolist
+      gWidgets2::enabled(tab4c[2,2]) = TRUE
+      gWidgets2::size(tab4c[1,2]) = min(max(nchar(items)),maxlen_box)
+      gWidgets2::svalue(tab4c[1,2]) = items[length(items)]
     }
 
   }
@@ -482,29 +495,29 @@ gui= function(envirfile=NULL) {
   #helpfunction for deleting marked folder when clicking button
   f_delFolder = function(h,...) {
       if(h$action=="EVID") {
-        sel = gWidgets::svalue(tab2a[1,2])
+        sel = gWidgets2::svalue(tab2a[1,2])
         vals = tab2a[1,2][]
         folds = setdiff(vals,sel)
         tab2a[1,2][] = folds  #folds #update combolist
         if(length(folds)==0) {
           tab2a[1,2][] = longspace #folds #update combolist
-          gWidgets::svalue(tab2a[1,2]) = longspace 
-          gWidgets::enabled(tab2a[2,1]) = FALSE
+          gWidgets2::svalue(tab2a[1,2]) = longspace 
+          gWidgets2::enabled(tab2a[2,1]) = FALSE
         } else {
-          gWidgets::svalue(tab2a[1,2]) = folds[1]
+          gWidgets2::svalue(tab2a[1,2]) = folds[1]
         }
       }
       if(h$action=="REF") {
-        sel = gWidgets::svalue(tab2b[1,2])
+        sel = gWidgets2::svalue(tab2b[1,2])
         vals = tab2b[1,2][]
         folds = setdiff(vals,sel)
         tab2b[1,2][] = folds #update combolist
         if(length(folds)==0) {
           tab2b[1,2][] = longspace #folds #update combolist
-          gWidgets::svalue(tab2b[1,2]) = longspace 
-          gWidgets::enabled(tab2b[2,1]) = FALSE
+          gWidgets2::svalue(tab2b[1,2]) = longspace 
+          gWidgets2::enabled(tab2b[2,1]) = FALSE
         } else {
-          gWidgets::svalue(tab2b[1,2]) = folds[1]
+          gWidgets2::svalue(tab2b[1,2]) = folds[1]
         }
       }
       saveFolds(folds,h$action) #get  h=list(action="EVID")
@@ -512,68 +525,68 @@ gui= function(envirfile=NULL) {
 
  f_delID = function(h,...) {
       if(h$action=="SIDsel") {
-        sel = gWidgets::svalue(tab2c[1,2])
+        sel = gWidgets2::svalue(tab2c[1,2])
         vals = tab2c[1,2][]
         folds = setdiff(vals,sel)
         tab2c[1,2][] = folds  #folds #update combolist
         if(length(folds)==0) {
           tab2c[1,2][] = longspace #folds #update combolist
-          gWidgets::svalue(tab2c[1,2]) = longspace 
-          gWidgets::enabled(tab2c[2,2]) = FALSE
+          gWidgets2::svalue(tab2c[1,2]) = longspace 
+          gWidgets2::enabled(tab2c[2,2]) = FALSE
         } else {
-          gWidgets::svalue(tab2c[1,2]) = folds[1]
+          gWidgets2::svalue(tab2c[1,2]) = folds[1]
         }
       }
       if(h$action=="BIDsel") {
-        sel = gWidgets::svalue(tab2d[1,2])
+        sel = gWidgets2::svalue(tab2d[1,2])
         vals = tab2d[1,2][]
         folds = setdiff(vals,sel)
         tab2d[1,2][] = folds #update combolist
         if(length(folds)==0) {
           tab2d[1,2][] = longspace #folds #update combolist
-          gWidgets::svalue(tab2d[1,2]) = longspace 
-          gWidgets::enabled(tab2d[2,2]) = FALSE
+          gWidgets2::svalue(tab2d[1,2]) = longspace 
+          gWidgets2::enabled(tab2d[2,2]) = FALSE
         } else {
-          gWidgets::svalue(tab2d[1,2]) = folds[1]
+          gWidgets2::svalue(tab2d[1,2]) = folds[1]
         }
       }
       if(h$action=="CIDsel") {
-        sel = gWidgets::svalue(tab2f[1,2])
+        sel = gWidgets2::svalue(tab2f[1,2])
         vals = tab2f[1,2][]
         folds = setdiff(vals,sel)
         tab2f[1,2][] = folds #update combolist
         if(length(folds)==0) {
           tab2f[1,2][] = longspace #folds #update combolist
-          gWidgets::svalue(tab2f[1,2]) = longspace 
-          gWidgets::enabled(tab2f[2,2]) = FALSE
+          gWidgets2::svalue(tab2f[1,2]) = longspace 
+          gWidgets2::enabled(tab2f[2,2]) = FALSE
         } else {
-          gWidgets::svalue(tab2f[1,2]) = folds[1]
+          gWidgets2::svalue(tab2f[1,2]) = folds[1]
         }
       }
       if(h$action=="SIDpat") {
-        sel = gWidgets::svalue(tab4b[1,2])
+        sel = gWidgets2::svalue(tab4b[1,2])
         vals = tab4b[1,2][]
         folds = setdiff(vals,sel)
         tab4b[1,2][] = folds  #folds #update combolist
         if(length(folds)==0) {
           tab4b[1,2][] = longspace #folds #update combolist
-          gWidgets::svalue(tab4b[1,2]) = longspace 
-          gWidgets::enabled(tab4b[2,2]) = FALSE
+          gWidgets2::svalue(tab4b[1,2]) = longspace 
+          gWidgets2::enabled(tab4b[2,2]) = FALSE
         } else {
-          gWidgets::svalue(tab4b[1,2]) = folds[1]
+          gWidgets2::svalue(tab4b[1,2]) = folds[1]
         }
       }
       if(h$action=="BIDpat") {
-        sel = gWidgets::svalue(tab4c[1,2])
+        sel = gWidgets2::svalue(tab4c[1,2])
         vals = tab4c[1,2][]
         folds = setdiff(vals,sel)
         tab4c[1,2][] = folds #update combolist
         if(length(folds)==0) {
           tab4c[1,2][] = longspace #folds #update combolist
-          gWidgets::svalue(tab4c[1,2]) = longspace 
-          gWidgets::enabled(tab4c[2,2]) = FALSE
+          gWidgets2::svalue(tab4c[1,2]) = longspace 
+          gWidgets2::enabled(tab4c[2,2]) = FALSE
         } else {
-          gWidgets::svalue(tab4c[1,2]) = folds[1]
+          gWidgets2::svalue(tab4c[1,2]) = folds[1]
         }
       }
 
@@ -596,156 +609,171 @@ gui= function(envirfile=NULL) {
  }
  
  #Main window:
- mainwin <- gWidgets::gwindow(softname, visible=FALSE, width=mwW,height=mwH)
- nb = gWidgets::gnotebook(container=mainwin)
- tabanalyse = gWidgets::ggroup(expand=TRUE,spacing=spc,container=nb,label="Analyse") #tab1: (select project and file storage)
- tabdata = gWidgets::ggroup(expand=TRUE,spacing=spc,container=nb,label="Data setup") #tab2: (select what data to search)
- tabsearch = gWidgets::ggroup(expand=TRUE,spacing=spc,container=nb,label="Search setup") #tab3: (select prefilter thresholds and model settings)
- tabpattern = gWidgets::ggroup(expand=TRUE,spacing=spc,container=nb,label="Other setup") #tab4: (User specified pattern setup)
+ mainwin <- gWidgets2::gwindow(softname, visible=FALSE)
+ nb = gWidgets2::gnotebook(container=mainwin)
+ tabanalyse = gWidgets2::ggroup(expand=TRUE,spacing=spc,container=nb,label="Analyse") #tab1: (select project and file storage)
+ tabdata = gWidgets2::ggroup(expand=TRUE,spacing=spc,container=nb,label="Data setup") #tab2: (select what data to search)
+ tabsearch = gWidgets2::ggroup(expand=TRUE,spacing=spc,container=nb,label="Search setup") #tab3: (select prefilter thresholds and model settings)
+ tabpattern = gWidgets2::ggroup(expand=TRUE,spacing=spc,container=nb,label="Other setup") #tab4: (User specified pattern setup)
 
- gWidgets::svalue(nb) <- 1 #initial start in first tab
+ gWidgets2::svalue(nb) <- 1 #initial start in first tab
 
 
 #####################################################
 ###############Tab 1: Analysis:######################
 #####################################################
 
-  tab1 <- gWidgets::glayout(spacing=spc,container=tabanalyse ) 
+  tab1 <- gWidgets2::glayout(spacing=spc,container=tabanalyse ) 
 
-  tab1a = gWidgets::glayout(spacing=spc,container=(tab1[1,1] <-gWidgets::gframe("Save/Load settings",container=tab1))) 
-  tab1a[1,1] <- gWidgets::gbutton("Save settings to file",container=tab1a,handler=f_saveproj)
-  tab1a[2,1] <- gWidgets::gbutton("Load settings from file",container=tab1a,handler=f_openproj)
-  tab1a[3,1] <- gWidgets::gbutton("RESTART",container=tab1a,handler=
-	function(h,...) {
-  	 gWidgets::dispose(mainwin)
-	 dnamatch2::gui(envirfile) #restart GUI with current environment (useful if projects are considered)
-     }
-  )
+  tab1a = gWidgets2::glayout(spacing=spc,container=(tab1[1,1] <-gWidgets2::gframe("Save/Load settings",container=tab1))) 
+  tab1a[1,1] <- gWidgets2::gbutton("Save settings to file",container=tab1a,handler=f_saveproj)
+  tab1a[2,1] <- gWidgets2::gbutton("Load settings from file",container=tab1a,handler=f_openproj)
+  tab1a[3,1] <- gWidgets2::gbutton("RESTART",container=tab1a,handler=
+  	function(h,...) {
+    	gWidgets2::dispose(mainwin)
+  	  dnamatch2::gui(envirfile) #restart GUI with current environment (useful if projects are considered)
+    })
 
-  tab1b = gWidgets::glayout(spacing=spc,container=(tab1[2,1] <-gWidgets::gframe("Directories",container=tab1))) 
-  tab1b[1,1] <- gWidgets::gbutton("Selected working directory:",container=tab1b,handler=
+  tab1b = gWidgets2::glayout(spacing=spc,container=(tab1[2,1] <-gWidgets2::gframe("Directories",container=tab1))) 
+  tab1b[1,1] <- gWidgets2::gbutton("Selected working directory:",container=tab1b,handler=
 	function(h,...) { 
-      fsel = gWidgets::gfile(text="Select directory",type="selectdir")
-      if(!is.na(fsel)) {
-	    setwd(fsel) #actually set work directory
-       opt = get("setup",envir=mmTK) #get option vals
-       opt$workdir = fsel
-       assign("setup",opt,envir=mmTK) #set to envir again
-       saveSetup(opt) #Save to file
-       gWidgets::svalue(tab1b[1,2]) = fsel
-      }
+      fsel = mygfile(text="Select directory",type="selectdir")
+      if(length(fsel)==0) return()
+      setwd(fsel) #actually set work directory
+      opt = get("setup",envir=mmTK) #get option vals
+      opt$workdir = fsel
+      assign("setup",opt,envir=mmTK) #set to envir again
+      saveSetup(opt) #Save to file
+      gWidgets2::svalue(tab1b[1,2]) = fsel
   })
-  tab1b[1,2] <- gWidgets::glabel(get("setup",envir=mmTK)$workdir,container=tab1b)
+  tab1b[1,2] <- gWidgets2::glabel(get("setup",envir=mmTK)$workdir,container=tab1b)
 
-  tab1b[2,1] <- gWidgets::gbutton("Selected name for matchfile:",container=tab1b,handler=
+  tab1b[2,1] <- gWidgets2::gbutton("Selected name for matchfile:",container=tab1b,handler=
 	function(h,...) { 
       opt = get("setup",envir=mmTK) #get option vals
-      fn = gWidgets::ginput(message="Select name",text=opt$matchfile)
+      fn = gWidgets2::ginput("Select name",text=opt$matchfile)
       if( is.na(fn) || fn==FALSE || fn=="") return() #no input given
       if(!grepl("\\.",fn)) fn = paste0(fn,".csv") #automatically add extension
       opt$matchfile = fn
       assign("setup",opt,envir=mmTK) #set to envir again
       saveSetup(opt) #Save to file
-      gWidgets::svalue(tab1b[2,2]) = fn
+      gWidgets2::svalue(tab1b[2,2]) = fn
   })
-  tab1b[2,2] <- gWidgets::glabel(get("setup",envir=mmTK)$matchfile,container=tab1b)
+  tab1b[2,2] <- gWidgets2::glabel(get("setup",envir=mmTK)$matchfile,container=tab1b)
 
-  tab1b[3,1] <- gWidgets::gbutton("Selected name for session folder:",container=tab1b,handler=
+  tab1b[3,1] <- gWidgets2::gbutton("Selected name for session folder:",container=tab1b,handler=
 	function(h,...) { 
-      fn = gWidgets::ginput(message="Select name",text=optL$sessionfold)
+      fn = gWidgets2::ginput("Select name",text=optL$sessionfold)
       if( is.na(fn) || fn==FALSE || fn=="") return() #no input given
       dir.create(fn, showWarnings = FALSE) #create folder
       optL = get("setup",envir=mmTK) #get option vals
       optL$sessionfold = fn
       assign("setup",optL,envir=mmTK) #set to envir again
       saveSetup(optL) #Save to file
-      gWidgets::svalue(tab1b[3,2]) = fn
+      gWidgets2::svalue(tab1b[3,2]) = fn
   })
-  tab1b[3,2] <- gWidgets::glabel(get("setup",envir=mmTK)$sessionfold,container=tab1b)
+  tab1b[3,2] <- gWidgets2::glabel(get("setup",envir=mmTK)$sessionfold,container=tab1b)
 
-  tab1c = gWidgets::glayout(spacing=spc,container=(tab1[3,1] <-gWidgets::gframe("Analyse",container=tab1))) 
-  tab1b[1,1] <- gWidgets::glabel("Remember to check the SETUP before searching:",container=tab1c)
-  tab1b[2,1] <- gWidgets::gbutton("Perform search",container=tab1c, handler= runAnalysis )
+  tab1c = gWidgets2::glayout(spacing=spc,container=(tab1[3,1] <-gWidgets2::gframe("Analyse",container=tab1))) 
+  tab1b[1,1] <- gWidgets2::glabel("Remember to check the SETUP before searching:",container=tab1c)
+  tab1b[2,1] <- gWidgets2::gbutton("Perform search",container=tab1c, handler= runAnalysis )
 
 
 #########################################################
 ###############Tab 2: Setup for format ##################
 #########################################################
 
-  tab2 <- gWidgets::glayout(spacing=spc,container=tabdata ) 
+  tab2 <- gWidgets2::glayout(spacing=spc,container=tabdata ) 
 
-  tab2a = gWidgets::glayout(spacing=spc,container=(tab2[2,1] <-gWidgets::gframe("Selected evidence folders",container=tab2))) 
-#  tab2a[1,1] <- gWidgets::glabel("Selected folders:",container=tab2a)
-  tab2a[1,1] <- gWidgets::gbutton("Add a folder",container=tab2a,handler=f_addFolder,action="EVID")
-  tab2a[2,1] <- gWidgets::gbutton("Remove marked",container=tab2a,handler=f_delFolder,action="EVID")
-  tab2a[2,2] <- gWidgets::gcheckbox(text="Consider subfolders", checked = get("setup",envir=mmTK)$searchSubFoldersEvid,container=tab2a,
+  tab2a = gWidgets2::glayout(spacing=spc,container=(tab2[2,1] <-gWidgets2::gframe("Selected evidence folders",container=tab2))) 
+#  tab2a[1,1] <- gWidgets2::glabel("Selected folders:",container=tab2a)
+  tab2a[1,1] <- gWidgets2::gbutton("Add a folder",container=tab2a,handler=f_addFolder,action="EVID")
+  tab2a[2,1] <- gWidgets2::gbutton("Remove marked",container=tab2a,handler=f_delFolder,action="EVID")
+  tab2a[2,2] <- gWidgets2::gcheckbox(text="Consider subfolders", checked = get("setup",envir=mmTK)$searchSubFoldersEvid,container=tab2a,
                             handler = function(x) {
                               opt = get("setup",envir=mmTK)  #receive settings from envir (preassigned or from file)
-                              opt$searchSubFoldersEvid = gWidgets::svalue(tab2a[2,2])
+                              opt$searchSubFoldersEvid = gWidgets2::svalue(tab2a[2,2])
                               assign("setup",opt,envir=mmTK) #set to envir again
                             })
   folds = getFolds("EVID") 
   if(is.null(folds) || length(folds)==0)  folds = longspace #numeric()
-  tab2a[1,2] <- gWidgets::gcombobox(items=folds,container=tab2a)
-  if(folds[1] == longspace) gWidgets::enabled(tab2a[2,1]) = FALSE
- 
-  tab2b = gWidgets::glayout(spacing=spc,container=(tab2[3,1] <-gWidgets::gframe("Selected reference folders",container=tab2))) 
-#  tab2b[1,1] <- gWidgets::glabel("Selected folders:",container=tab2b)
-  tab2b[1,1] <- gWidgets::gbutton("Add a folder",container=tab2b,handler=f_addFolder,action="REF")
-  tab2b[2,1] <- gWidgets::gbutton("Remove marked",container=tab2b,handler=f_delFolder,action="REF")
-  tab2b[2,2] <- gWidgets::gcheckbox(text="Consider subfolders", checked = get("setup",envir=mmTK)$searchSubFoldersEvid,container=tab2b,
+  tab2a[1,2] <- gWidgets2::gcombobox(items=folds,container=tab2a)
+  if(folds[1] == longspace) {
+    gWidgets2::enabled(tab2a[2,1]) = FALSE 
+  } else {
+    gWidgets2::size(tab2a[1,2]) = min(max(nchar(folds)),maxlen_box) #possibly extend cell
+  }
+  
+  tab2b = gWidgets2::glayout(spacing=spc,container=(tab2[3,1] <-gWidgets2::gframe("Selected reference folders",container=tab2))) 
+#  tab2b[1,1] <- gWidgets2::glabel("Selected folders:",container=tab2b)
+  tab2b[1,1] <- gWidgets2::gbutton("Add a folder",container=tab2b,handler=f_addFolder,action="REF")
+  tab2b[2,1] <- gWidgets2::gbutton("Remove marked",container=tab2b,handler=f_delFolder,action="REF")
+  tab2b[2,2] <- gWidgets2::gcheckbox(text="Consider subfolders", checked = get("setup",envir=mmTK)$searchSubFoldersEvid,container=tab2b,
                             handler = function(x) {
                               opt = get("setup",envir=mmTK)  #receive settings from envir (preassigned or from file)
-                              opt$searchSubFoldersRef = gWidgets::svalue(tab2b[2,2])
+                              opt$searchSubFoldersRef = gWidgets2::svalue(tab2b[2,2])
                               assign("setup",opt,envir=mmTK) #set to envir again
                             })
   folds = getFolds("REF") 
   if(is.null(folds) || length(folds)==0)  folds = longspace #numeric()
-  tab2b[1,2] <- gWidgets::gcombobox(items=folds,container=tab2b)
-  if(folds[1] == longspace) gWidgets::enabled(tab2b[2,1]) = FALSE
+  tab2b[1,2] <- gWidgets2::gcombobox(items=folds,container=tab2b)
+  if(folds[1] == longspace) {
+    gWidgets2::enabled(tab2b[2,1]) = FALSE
+  } else {
+    gWidgets2::size(tab2b[1,2]) = min(max(nchar(folds)),maxlen_box) #possibly extend cell
+  }
 
-
-  tab2c = gWidgets::glayout(spacing=spc,container=(tab2[4,1] <-gWidgets::gframe("Selecting specific SampleIDs (SIDs)",container=tab2))) 
-  tab2c[1,1] <- gWidgets::glabel("Selected SIDs:",container=tab2c)
-  tab2c[2,1] <- gWidgets::gbutton("Add an ID",container=tab2c,handler=f_addID,action="SIDsel")
-  tab2c[2,2] <- gWidgets::gbutton("Remove marked ID",container=tab2c,handler=f_delID,action="SIDsel")
+  tab2c = gWidgets2::glayout(spacing=spc,container=(tab2[4,1] <-gWidgets2::gframe("Selecting specific SampleIDs (SIDs)",container=tab2))) 
+  tab2c[1,1] <- gWidgets2::glabel("Selected SIDs:",container=tab2c)
+  tab2c[2,1] <- gWidgets2::gbutton("Add an ID",container=tab2c,handler=f_addID,action="SIDsel")
+  tab2c[2,2] <- gWidgets2::gbutton("Remove marked ID",container=tab2c,handler=f_delID,action="SIDsel")
   folds = getFolds("SIDsel") 
   if(is.null(folds) || length(folds)==0)  folds = shortspace #numeric()
-  tab2c[1,2] <- gWidgets::gcombobox(items=folds,container=tab2c)
-  if(folds[1] == shortspace) gWidgets::enabled(tab2c[2,2]) = FALSE
+  tab2c[1,2] <- gWidgets2::gcombobox(items=folds,container=tab2c)
+  if(folds[1] == shortspace) {
+    gWidgets2::enabled(tab2c[2,2]) = FALSE
+  } else {
+    gWidgets2::size(tab2c[1,2]) = min(max(nchar(folds)),maxlen_box) #possibly extend cell
+  }
 
-  tab2d = gWidgets::glayout(spacing=spc,container=(tab2[5,1] <-gWidgets::gframe("Selecting specific BatchIDs (BIDs)",container=tab2))) 
-  tab2d[1,1] <- gWidgets::glabel("Selected BIDs:",container=tab2d)
-  tab2d[2,1] <- gWidgets::gbutton("Add an ID",container=tab2d,handler=f_addID,action="BIDsel")
-  tab2d[2,2] <- gWidgets::gbutton("Remove marked ID",container=tab2d,handler=f_delID,action="BIDsel")
+  tab2d = gWidgets2::glayout(spacing=spc,container=(tab2[5,1] <-gWidgets2::gframe("Selecting specific BatchIDs (BIDs)",container=tab2))) 
+  tab2d[1,1] <- gWidgets2::glabel("Selected BIDs:",container=tab2d)
+  tab2d[2,1] <- gWidgets2::gbutton("Add an ID",container=tab2d,handler=f_addID,action="BIDsel")
+  tab2d[2,2] <- gWidgets2::gbutton("Remove marked ID",container=tab2d,handler=f_delID,action="BIDsel")
   folds = getFolds("BIDsel") 
   if(is.null(folds) || length(folds)==0)  folds = shortspace #numeric()
-  tab2d[1,2] <- gWidgets::gcombobox(items=folds,container=tab2d)
-  if(folds[1] == shortspace) gWidgets::enabled(tab2d[2,2]) = FALSE
+  tab2d[1,2] <- gWidgets2::gcombobox(items=folds,container=tab2d)
+  if(folds[1] == shortspace) {
+    gWidgets2::enabled(tab2d[2,2]) = FALSE
+  } else {
+    gWidgets2::size(tab2d[1,2]) = min(max(nchar(folds)),maxlen_box) #possibly extend cell
+  }
 
-  tab2f = gWidgets::glayout(spacing=spc,container=(tab2[6,1] <-gWidgets::gframe("Selecting specific CaseIDs (CIDs)",container=tab2))) 
-  tab2f[1,1] <- gWidgets::glabel("Selected CIDs:",container=tab2f)
-  tab2f[2,1] <- gWidgets::gbutton("Add an ID",container=tab2f,handler=f_addID,action="CIDsel")
-  tab2f[2,2] <- gWidgets::gbutton("Remove marked ID",container=tab2f,handler=f_delID,action="CIDsel")
+  tab2f = gWidgets2::glayout(spacing=spc,container=(tab2[6,1] <-gWidgets2::gframe("Selecting specific CaseIDs (CIDs)",container=tab2))) 
+  tab2f[1,1] <- gWidgets2::glabel("Selected CIDs:",container=tab2f)
+  tab2f[2,1] <- gWidgets2::gbutton("Add an ID",container=tab2f,handler=f_addID,action="CIDsel")
+  tab2f[2,2] <- gWidgets2::gbutton("Remove marked ID",container=tab2f,handler=f_delID,action="CIDsel")
   folds = getFolds("CIDsel") 
   if(is.null(folds) || length(folds)==0)  folds = shortspace #numeric()
-  tab2f[1,2] <- gWidgets::gcombobox(items=folds,container=tab2f)
-  if(folds[1] == shortspace) gWidgets::enabled(tab2f[2,2]) = FALSE
+  tab2f[1,2] <- gWidgets2::gcombobox(items=folds,container=tab2f)
+  if(folds[1] == shortspace) {
+    gWidgets2::enabled(tab2f[2,2]) = FALSE
+  } else {
+    gWidgets2::size(tab2f[1,2]) = min(max(nchar(folds)),maxlen_box) #possibly extend cell
+  }
 
-
-  tab2e = gWidgets::glayout(spacing=spc,container=(tab2[1,1] <-gWidgets::gframe("Population frequencies",container=tab2))) 
-  tab2e[1,1] <- gWidgets::gbutton("Selected frequency file:",container=tab2e,handler = 
+  tab2e = gWidgets2::glayout(spacing=spc,container=(tab2[1,1] <-gWidgets2::gframe("Population frequencies",container=tab2))) 
+  tab2e[1,1] <- gWidgets2::gbutton("Selected frequency file:",container=tab2e,handler = 
 	function(h,...) { 
-      fsel = gWidgets::gfile(text="Select frequency file",type="open")
-      if(!is.na(fsel)) {
-       opt = get("setup",envir=mmTK) #get
-       opt$freqfile = fsel
-       assign("setup",opt,envir=mmTK) #set to envir
-       saveSetup(opt) #Save to file
-       gWidgets::svalue(tab2e[1,2]) = fsel
-      }
+    fsel = mygfile(text="Select frequency file",type="open")
+    if(length(fsel)==0) return()
+    opt = get("setup",envir=mmTK) #get
+    opt$freqfile = fsel
+    assign("setup",opt,envir=mmTK) #set to envir
+    saveSetup(opt) #Save to file
+    gWidgets2::svalue(tab2e[1,2]) = fsel
   })
-  tab2e[1,2] <- gWidgets::glabel(get("setup",envir=mmTK)$freqfile,container=tab2e)
+  tab2e[1,2] <- gWidgets2::glabel(get("setup",envir=mmTK)$freqfile,container=tab2e)
 
 
 ####################################################
@@ -754,83 +782,83 @@ gui= function(envirfile=NULL) {
 
   txtbool = c("NO","YES")
   txtsearch = c("MAC","+Qual","++Quan") #search options
-  tab3 <- gWidgets::glayout(spacing=spc,container=tabsearch ) 
+  tab3 <- gWidgets2::glayout(spacing=spc,container=tabsearch ) 
 
-  tab3a = gWidgets::glayout(spacing=spc,container=(tab3[1,2] <-gWidgets::gframe("Search options",container=tab3))) 
-  tab3a[1,1] <- gWidgets::glabel("Search within same cases (CID):",container=tab3a)
-  tab3a[1,2] <- gWidgets::gradio(items=txtbool,container=tab3a,horizontal = TRUE,selected=sum(get("setup",envir=mmTK)$sameCID)+1 )
-  tab3a[2,1] <- gWidgets::glabel("Search between stains:",container=tab3a)
-  tab3a[2,2] <- gWidgets::gradio(items=txtbool,container=tab3a,horizontal = TRUE,selected=sum(get("setup",envir=mmTK)$betweensamples)+1)
-  tab3a[3,1] <- gWidgets::glabel("Search strategy:",container=tab3a)
-  tab3a[3,2] <- gWidgets::gradio(items=txtsearch,container=tab3a,horizontal = TRUE,selected=get("setup",envir=mmTK)$searchoption)
+  tab3a = gWidgets2::glayout(spacing=spc,container=(tab3[1,2] <-gWidgets2::gframe("Search options",container=tab3))) 
+  tab3a[1,1] <- gWidgets2::glabel("Search within same cases (CID):",container=tab3a)
+  tab3a[1,2] <- gWidgets2::gradio(items=txtbool,container=tab3a,horizontal = TRUE,selected=sum(get("setup",envir=mmTK)$sameCID)+1 )
+  tab3a[2,1] <- gWidgets2::glabel("Search between stains:",container=tab3a)
+  tab3a[2,2] <- gWidgets2::gradio(items=txtbool,container=tab3a,horizontal = TRUE,selected=sum(get("setup",envir=mmTK)$betweensamples)+1)
+  tab3a[3,1] <- gWidgets2::glabel("Search strategy:",container=tab3a)
+  tab3a[3,2] <- gWidgets2::gradio(items=txtsearch,container=tab3a,horizontal = TRUE,selected=get("setup",envir=mmTK)$searchoption)
   
-  tab3b = gWidgets::glayout(spacing=spc,container=(tab3[2,2] <-gWidgets::gframe("Time windows",container=tab3))) 
-  tab3b[1,1] <- gWidgets::glabel("Number of days back (days):",container=tab3b)
-  tab3b[1,2] <- gWidgets::gedit(get("setup",envir=mmTK)$Thist,container=tab3b)
+  tab3b = gWidgets2::glayout(spacing=spc,container=(tab3[2,2] <-gWidgets2::gframe("Time windows",container=tab3))) 
+  tab3b[1,1] <- gWidgets2::glabel("Number of days back (days):",container=tab3b)
+  tab3b[1,2] <- gWidgets2::gedit(get("setup",envir=mmTK)$Thist,container=tab3b)
 
-  tab3b[2,1] <- gWidgets::glabel("Time difference between matches (days):",container=tab3b)
-  tab3b[2,2] <- gWidgets::gedit(get("setup",envir=mmTK)$timediff,container=tab3b)
+  tab3b[2,1] <- gWidgets2::glabel("Time difference between matches (days):",container=tab3b)
+  tab3b[2,2] <- gWidgets2::gedit(get("setup",envir=mmTK)$timediff,container=tab3b)
 
-  tab3b[3,1] <- gWidgets::glabel("Search time (YY-MM-DD-HH-MM-SS)",container=tab3b)
-  tab3b[3,2] <- gWidgets::gedit(get("setup",envir=mmTK)$searchtime,container=tab3b)
-  tab3b[4,2] <- gWidgets::gbutton("Update time stamp (current time)",container=tab3b,handler=function(h,...) {
-    gWidgets::svalue(tab3b[3,2]) = format(Sys.time(),format=timestamp) #set time stamp to now
+  tab3b[3,1] <- gWidgets2::glabel("Search time (YY-MM-DD-HH-MM-SS)",container=tab3b)
+  tab3b[3,2] <- gWidgets2::gedit(get("setup",envir=mmTK)$searchtime,container=tab3b)
+  tab3b[4,2] <- gWidgets2::gbutton("Update time stamp (current time)",container=tab3b,handler=function(h,...) {
+    gWidgets2::svalue(tab3b[3,2]) = format(Sys.time(),format=timestamp) #set time stamp to now
   })
   
-  tab3c = gWidgets::glayout(spacing=spc,container=(tab3[1,1] <-gWidgets::gframe("Score thresholds",container=tab3))) 
-  tab3c[1,1] <- gWidgets::glabel("Matching allele counting (MAC):",container=tab3c)
-  tab3c[1,2] <- gWidgets::gedit(get("setup",envir=mmTK)$threshMAC,container=tab3c)
+  tab3c = gWidgets2::glayout(spacing=spc,container=(tab3[1,1] <-gWidgets2::gframe("Score thresholds",container=tab3))) 
+  tab3c[1,1] <- gWidgets2::glabel("Matching allele counting (MAC):",container=tab3c)
+  tab3c[1,2] <- gWidgets2::gedit(get("setup",envir=mmTK)$threshMAC,container=tab3c)
 
-  tab3c[2,1] <- gWidgets::glabel("Qualitative LR:",container=tab3c)
-  tab3c[2,2] <- gWidgets::gedit(get("setup",envir=mmTK)$threshLRqual,container=tab3c)
+  tab3c[2,1] <- gWidgets2::glabel("Qualitative LR:",container=tab3c)
+  tab3c[2,2] <- gWidgets2::gedit(get("setup",envir=mmTK)$threshLRqual,container=tab3c)
 
-  tab3c[3,1] <- gWidgets::glabel("Quantitative LR:",container=tab3c)
-  tab3c[3,2] <- gWidgets::gedit(get("setup",envir=mmTK)$threshLRquan,container=tab3c)
+  tab3c[3,1] <- gWidgets2::glabel("Quantitative LR:",container=tab3c)
+  tab3c[3,2] <- gWidgets2::gedit(get("setup",envir=mmTK)$threshLRquan,container=tab3c)
 
 
-  tab3d = gWidgets::glayout(spacing=spc,container=(tab3[2,1] <-gWidgets::gframe("Model setup",container=tab3))) 
-  tab3d[1,1] <- gWidgets::glabel("Set kit:",container=tab3d)
+  tab3d = gWidgets2::glayout(spacing=spc,container=(tab3[2,1] <-gWidgets2::gframe("Model setup",container=tab3))) 
+  tab3d[1,1] <- gWidgets2::glabel("Set kit:",container=tab3d)
   kits <- c( emptyName,euroformix::getKit()) #include empty kit as a possibility (this is default)
-  tab3d[1,2] <- gWidgets::gcombobox(kits,container=tab3d,selected=which(get("setup",envir=mmTK)$kit==kits))
-  tab3d[2,1] <- gWidgets::glabel("Drop-in prob=",container=tab3d)
-  tab3d[2,2] <- gWidgets::gedit(get("setup",envir=mmTK)$pC,container=tab3d)
-  tab3d[3,1] <- gWidgets::glabel("Lambda param=",container=tab3d)
-  tab3d[3,2] <- gWidgets::gedit(get("setup",envir=mmTK)$lambda,container=tab3d)
-  tab3d[4,1] <- gWidgets::glabel("Min Freq=",container=tab3d)
-  tab3d[4,2] <- gWidgets::gedit(get("setup",envir=mmTK)$minFreq,container=tab3d)
+  tab3d[1,2] <- gWidgets2::gcombobox(kits,container=tab3d,selected=which(get("setup",envir=mmTK)$kit==kits))
+  tab3d[2,1] <- gWidgets2::glabel("Drop-in prob=",container=tab3d)
+  tab3d[2,2] <- gWidgets2::gedit(get("setup",envir=mmTK)$pC,container=tab3d)
+  tab3d[3,1] <- gWidgets2::glabel("Lambda param=",container=tab3d)
+  tab3d[3,2] <- gWidgets2::gedit(get("setup",envir=mmTK)$lambda,container=tab3d)
+  tab3d[4,1] <- gWidgets2::glabel("Min Freq=",container=tab3d)
+  tab3d[4,2] <- gWidgets2::gedit(get("setup",envir=mmTK)$minFreq,container=tab3d)
 
-  tab3e = gWidgets::glayout(spacing=spc,container=(tab3[3,1] <-gWidgets::gframe("Prefilter thresholds",container=tab3))) 
-  tab3e[1,1] <- gWidgets::glabel("Analytical threshold (AT)",container=tab3e)
-  tab3e[1,2] <- gWidgets::gedit(get("setup",envir=mmTK)$threshHeight,container=tab3e)
-  tab3e[2,1] <- gWidgets::glabel("Stutter rate threshold",container=tab3e)
-  tab3e[2,2] <- gWidgets::gedit(get("setup",envir=mmTK)$threshStutt,container=tab3e)
-  tab3e[3,1] <- gWidgets::glabel("Major extraction rate threshold",container=tab3e)
-  tab3e[3,2] <- gWidgets::gedit(get("setup",envir=mmTK)$threshMaj,container=tab3e)
-  tab3e[4,1] <- gWidgets::glabel("Minimum loci requirement (Evid)",container=tab3e)
-  tab3e[4,2] <- gWidgets::gedit(get("setup",envir=mmTK)$minLocStain,container=tab3e)
-  tab3e[5,1] <- gWidgets::glabel("Minimum loci requirement (Maj)",container=tab3e)
-  tab3e[5,2] <- gWidgets::gedit(get("setup",envir=mmTK)$minLocMaj,container=tab3e)
+  tab3e = gWidgets2::glayout(spacing=spc,container=(tab3[3,1] <-gWidgets2::gframe("Prefilter thresholds",container=tab3))) 
+  tab3e[1,1] <- gWidgets2::glabel("Analytical threshold (AT)",container=tab3e)
+  tab3e[1,2] <- gWidgets2::gedit(get("setup",envir=mmTK)$threshHeight,container=tab3e)
+  tab3e[2,1] <- gWidgets2::glabel("Stutter rate threshold",container=tab3e)
+  tab3e[2,2] <- gWidgets2::gedit(get("setup",envir=mmTK)$threshStutt,container=tab3e)
+  tab3e[3,1] <- gWidgets2::glabel("Major extraction rate threshold",container=tab3e)
+  tab3e[3,2] <- gWidgets2::gedit(get("setup",envir=mmTK)$threshMaj,container=tab3e)
+  tab3e[4,1] <- gWidgets2::glabel("Minimum loci requirement (Evid)",container=tab3e)
+  tab3e[4,2] <- gWidgets2::gedit(get("setup",envir=mmTK)$minLocStain,container=tab3e)
+  tab3e[5,1] <- gWidgets2::glabel("Minimum loci requirement (Maj)",container=tab3e)
+  tab3e[5,2] <- gWidgets2::gedit(get("setup",envir=mmTK)$minLocMaj,container=tab3e)
 
-  tab3f = gWidgets::glayout(spacing=spc,container=(tab3[3,2] <-gWidgets::gframe("Other options",container=tab3))) 
-  tab3f[1,1] <- gWidgets::glabel("Plot score histogram in search",container=tab3f)
-  tab3f[1,2] <- gWidgets::gradio(txtbool,horizontal=TRUE,container=tab3f,selected=sum(get("setup",envir=mmTK)$printHistPlots)+1 )
-  tab3f[2,1] <- gWidgets::glabel("Write detailed score info to file",container=tab3f)
-  tab3f[2,2] <- gWidgets::gradio(txtbool,horizontal=TRUE,container=tab3f,selected=sum(get("setup",envir=mmTK)$writeScores)+1 )
-  tab3f[3,1] <- gWidgets::glabel("Print graph of matches:",container=tab3f)
-  tab3f[3,2] <- gWidgets::gradio(items=txtbool,container=tab3f,horizontal = TRUE,selected=sum(get("setup",envir=mmTK)$printGraph)+1)
-  tab3f[4,1] <- gWidgets::glabel("Ignore empty markers:",container=tab3f)
-  tab3f[4,2] <- gWidgets::gradio(items=txtbool,container=tab3f,horizontal = TRUE,selected=sum(get("setup",envir=mmTK)$ignoreEmptyLoci)+1)
+  tab3f = gWidgets2::glayout(spacing=spc,container=(tab3[3,2] <-gWidgets2::gframe("Other options",container=tab3))) 
+  tab3f[1,1] <- gWidgets2::glabel("Plot score histogram in search",container=tab3f)
+  tab3f[1,2] <- gWidgets2::gradio(txtbool,horizontal=TRUE,container=tab3f,selected=sum(get("setup",envir=mmTK)$printHistPlots)+1 )
+  tab3f[2,1] <- gWidgets2::glabel("Write detailed score info to file",container=tab3f)
+  tab3f[2,2] <- gWidgets2::gradio(txtbool,horizontal=TRUE,container=tab3f,selected=sum(get("setup",envir=mmTK)$writeScores)+1 )
+  tab3f[3,1] <- gWidgets2::glabel("Print graph of matches:",container=tab3f)
+  tab3f[3,2] <- gWidgets2::gradio(items=txtbool,container=tab3f,horizontal = TRUE,selected=sum(get("setup",envir=mmTK)$printGraph)+1)
+  tab3f[4,1] <- gWidgets2::glabel("Ignore empty markers:",container=tab3f)
+  tab3f[4,2] <- gWidgets2::gradio(items=txtbool,container=tab3f,horizontal = TRUE,selected=sum(get("setup",envir=mmTK)$ignoreEmptyLoci)+1)
   
-#  tab3f[5,1] <- gWidgets::glabel("Maximum number of contributors:",container=tab3f)
-  tab3f[5,1] <- gWidgets::glabel("Max contr.num. (QUAL):",container=tab3f)
-  tab3f[5,2] <- gWidgets::gedit(get("setup",envir=mmTK)$maxKqual,container=tab3f)
-  tab3f[6,1] <- gWidgets::glabel("Max contr.num. (QUAN):",container=tab3f)
-  tab3f[6,2] <- gWidgets::gedit(get("setup",envir=mmTK)$maxKquan,container=tab3f)
-  tab3f[7,1] <- gWidgets::glabel("Req.optim.num. (QUAN):",container=tab3f) #required number of optimizations for quantitative model
-  tab3f[7,2] <- gWidgets::gedit(get("setup",envir=mmTK)$nDone,container=tab3f)
+#  tab3f[5,1] <- gWidgets2::glabel("Maximum number of contributors:",container=tab3f)
+  tab3f[5,1] <- gWidgets2::glabel("Max contr.num. (QUAL):",container=tab3f)
+  tab3f[5,2] <- gWidgets2::gedit(get("setup",envir=mmTK)$maxKqual,container=tab3f)
+  tab3f[6,1] <- gWidgets2::glabel("Max contr.num. (QUAN):",container=tab3f)
+  tab3f[6,2] <- gWidgets2::gedit(get("setup",envir=mmTK)$maxKquan,container=tab3f)
+  tab3f[7,1] <- gWidgets2::glabel("Req.optim.num. (QUAN):",container=tab3f) #required number of optimizations for quantitative model
+  tab3f[7,2] <- gWidgets2::gedit(get("setup",envir=mmTK)$nDone,container=tab3f)
   
   
-  tab3[4,1] = gWidgets::gbutton("Save settings",container=tab3,handler = 
+  tab3[4,1] = gWidgets2::gbutton("Save settings",container=tab3,handler = 
 	function(h,...) { 
 	#CHECKS: checkProb[0,1];checkPositive[(0;checkPosInteger[(1;  (val,what,strict)
 	#names(optL)
@@ -861,19 +889,19 @@ gui= function(envirfile=NULL) {
 	opt$nDone = checkPosInteger(val(tab3f[7,2]),"Number of required optimizations (QUAN)",strict=TRUE)
 	
 	#NO/YES choice
-	opt$sameCID = gWidgets::svalue(tab3a[1,2])==txtbool[2]
-	opt$betweensamples = gWidgets::svalue(tab3a[2,2])==txtbool[2]
-	opt$printHistPlots = gWidgets::svalue(tab3f[1,2])==txtbool[2]
-	opt$writeScores = gWidgets::svalue(tab3f[2,2])==txtbool[2]
-	opt$printGraph = gWidgets::svalue(tab3f[3,2])==txtbool[2]
-	opt$ignoreEmptyLoci = gWidgets::svalue(tab3f[4,2])==txtbool[2]
+	opt$sameCID = gWidgets2::svalue(tab3a[1,2])==txtbool[2]
+	opt$betweensamples = gWidgets2::svalue(tab3a[2,2])==txtbool[2]
+	opt$printHistPlots = gWidgets2::svalue(tab3f[1,2])==txtbool[2]
+	opt$writeScores = gWidgets2::svalue(tab3f[2,2])==txtbool[2]
+	opt$printGraph = gWidgets2::svalue(tab3f[3,2])==txtbool[2]
+	opt$ignoreEmptyLoci = gWidgets2::svalue(tab3f[4,2])==txtbool[2]
 	
 	#indicate search option
-	opt$searchoption = which(gWidgets::svalue(tab3a[3,2])==txtsearch)
+	opt$searchoption = which(gWidgets2::svalue(tab3a[3,2])==txtsearch)
 	
 	#Text format:
-	opt$kit = gWidgets::svalue(tab3d[1,2])
-     tmp = gWidgets::svalue(tab3b[3,2]) #get search time
+	opt$kit = gWidgets2::svalue(tab3d[1,2])
+     tmp = gWidgets2::svalue(tab3b[3,2]) #get search time
      tmp2 = as.POSIXct(tmp,format=timestamp) #convert to time format
      if(is.na(tmp) || is.na(tmp2)) errorMessage("The search time was not correctly specified.\nPlease check format!") 
      opt$searchtime = tmp #keep timestamp only if successful
@@ -881,86 +909,84 @@ gui= function(envirfile=NULL) {
  	#Store settings:
      assign("setup",opt,envir=mmTK) #set to envir
     	saveSetup(opt)
-  	gWidgets::gmessage("Settings were saved successfully!",title="Message") 
+  	gWidgets2::gmessage("Settings were saved successfully!",title="Message") 
   }) #Done saving settings
 
 #########################################################
 ###############Tab 4: Setup for format ##################
 #########################################################
-  tab4 <- gWidgets::glayout(spacing=spc,container=tabpattern) 
+  tab4 <- gWidgets2::glayout(spacing=spc,container=tabpattern) 
 
-  tab4a = gWidgets::glayout(spacing=spc,container=(tab4[1,1] <-gWidgets::gframe("Patterns (prefix) of IDs",container=tab4))) 
-  tab4a[1,1] <- gWidgets::gbutton("Set pattern for Separating IDs:",container=tab4a,handler=
+  tab4a = gWidgets2::glayout(spacing=spc,container=(tab4[1,1] <-gWidgets2::gframe("Patterns (prefix) of IDs",container=tab4))) 
+  tab4a[1,1] <- gWidgets2::gbutton("Set pattern for Separating IDs:",container=tab4a,handler=
     function(h,...) {
-     pat = gWidgets::ginput(message="Set separator pattern for ID",text=get("setup",envir=mmTK)$IDsep)
+     pat = gWidgets2::ginput("Set separator pattern for ID",text=get("setup",envir=mmTK)$IDsep)
      if( is.na(pat) || pat==FALSE || pat=="") return() #no input given
      opt = get("setup",envir=mmTK) #get
      opt$IDsep= pat 
      assign("setup",opt,envir=mmTK) #set to envir
      saveSetup(opt) #Save to file
-     gWidgets::svalue(tab4a[1,2]) = pat
+     gWidgets2::svalue(tab4a[1,2]) = pat
     })
-  tab4a[1,2] <- gWidgets::glabel(get("setup",envir=mmTK)$IDsep,container=tab4a)
+  tab4a[1,2] <- gWidgets2::glabel(get("setup",envir=mmTK)$IDsep,container=tab4a)
 
-  tab4b = gWidgets::glayout(spacing=spc,container=(tab4[2,1] <-gWidgets::gframe("Set pattern for SampleIDs (SIDs):",container=tab4))) 
-  tab4b[1,1] <- gWidgets::glabel("Required pattern(s):",container=tab4b)
-  tab4b[2,1] <- gWidgets::gbutton("Add a pattern",container=tab4b,handler=f_addID,action="SIDpat")
-  tab4b[2,2] <- gWidgets::gbutton("Remove a pattern",container=tab4b,handler=f_delID,action="SIDpat")
+  tab4b = gWidgets2::glayout(spacing=spc,container=(tab4[2,1] <-gWidgets2::gframe("Set pattern for SampleIDs (SIDs):",container=tab4))) 
+  tab4b[1,1] <- gWidgets2::glabel("Required pattern(s):",container=tab4b)
+  tab4b[2,1] <- gWidgets2::gbutton("Add a pattern",container=tab4b,handler=f_addID,action="SIDpat")
+  tab4b[2,2] <- gWidgets2::gbutton("Remove a pattern",container=tab4b,handler=f_delID,action="SIDpat")
   folds = getFolds("SIDpat") 
   if(is.null(folds) || length(folds)==0)  folds = shortspace #numeric()
-  tab4b[1,2] <- gWidgets::gcombobox(items=folds,container=tab4b)
-  if(folds[1] == shortspace) gWidgets::enabled(tab4b[2,2]) = FALSE
+  tab4b[1,2] <- gWidgets2::gcombobox(items=folds,container=tab4b)
+  if(folds[1] == shortspace) gWidgets2::enabled(tab4b[2,2]) = FALSE
 
-  tab4c = gWidgets::glayout(spacing=spc,container=(tab4[3,1] <-gWidgets::gframe("Set pattern for Batch files (BIDs):",container=tab4))) 
-  tab4c[1,1] <- gWidgets::glabel("Required pattern(s):",container=tab4c)
-  tab4c[2,1] <- gWidgets::gbutton("Add a pattern",container=tab4c,handler=f_addID,action="BIDpat")
-  tab4c[2,2] <- gWidgets::gbutton("Remove a pattern",container=tab4c,handler=f_delID,action="BIDpat")
+  tab4c = gWidgets2::glayout(spacing=spc,container=(tab4[3,1] <-gWidgets2::gframe("Set pattern for Batch files (BIDs):",container=tab4))) 
+  tab4c[1,1] <- gWidgets2::glabel("Required pattern(s):",container=tab4c)
+  tab4c[2,1] <- gWidgets2::gbutton("Add a pattern",container=tab4c,handler=f_addID,action="BIDpat")
+  tab4c[2,2] <- gWidgets2::gbutton("Remove a pattern",container=tab4c,handler=f_delID,action="BIDpat")
   folds = getFolds("BIDpat") 
   if(is.null(folds) || length(folds)==0)  folds = shortspace #numeric()
-  tab4c[1,2] <- gWidgets::gcombobox(items=folds,container=tab4c)
-  if(folds[1] == shortspace) gWidgets::enabled(tab4c[2,2]) = FALSE
+  tab4c[1,2] <- gWidgets2::gcombobox(items=folds,container=tab4c)
+  if(folds[1] == shortspace) gWidgets2::enabled(tab4c[2,2]) = FALSE
 
   
-  tab4d = gWidgets::glayout(spacing=spc,container=(tab4[4,1] <-gWidgets::gframe("Select import data functions (Evid/Ref):",container=tab4))) 
+  tab4d = gWidgets2::glayout(spacing=spc,container=(tab4[4,1] <-gWidgets2::gframe("Select import data functions (Evid/Ref):",container=tab4))) 
   
-  tab4d[1,1] <- gWidgets::gbutton("Selected import function (Evid):",container=tab4d,handler = 
+  tab4d[1,1] <- gWidgets2::gbutton("Selected import function (Evid):",container=tab4d,handler = 
                                     function(h,...) { 
-                                      fsel = gWidgets::gfile(text="Select file with R-function to import Evidence files",type="open")
-                                      if(!is.na(fsel)) {
-                                        opt = get("setup",envir=mmTK) #get
-                                        opt$fileReaderEvid = fsel #set selected file
-                                        assign("setup",opt,envir=mmTK) #set to envir
-                                        saveSetup(opt) #Save to file
-                                        gWidgets::svalue(tab4d[1,2]) = fsel
-                                      }
+                                      fsel = mygfile(text="Select file with R-function to import Evidence files",type="open")
+                                      if(length(fsel)==0) return()
+                                      opt = get("setup",envir=mmTK) #get
+                                      opt$fileReaderEvid = fsel #set selected file
+                                      assign("setup",opt,envir=mmTK) #set to envir
+                                      saveSetup(opt) #Save to file
+                                      gWidgets2::svalue(tab4d[1,2]) = fsel
                                     })
-  tab4d[1,2] <- gWidgets::glabel(get("setup",envir=mmTK)$fileReaderEvid,container=tab4d)
+  tab4d[1,2] <- gWidgets2::glabel(get("setup",envir=mmTK)$fileReaderEvid,container=tab4d)
   
-  tab4d[2,1] <- gWidgets::gbutton("Selected import function (Ref):",container=tab4d,handler = 
+  tab4d[2,1] <- gWidgets2::gbutton("Selected import function (Ref):",container=tab4d,handler = 
                                     function(h,...) { 
-                                      fsel = gWidgets::gfile(text="Select file with R-function to import Reference files",type="open")
-                                      if(!is.na(fsel)) {
-                                        opt = get("setup",envir=mmTK) #get
-                                        opt$fileReaderRef = fsel #set selected file
-                                        assign("setup",opt,envir=mmTK) #set to envir
-                                        saveSetup(opt) #Save to file
-                                        gWidgets::svalue(tab4d[2,2]) = fsel
-                                      }
+                                      fsel = mygfile(text="Select file with R-function to import Reference files",type="open")
+                                      if(length(fsel)==0) return()
+                                      opt = get("setup",envir=mmTK) #get
+                                      opt$fileReaderRef = fsel #set selected file
+                                      assign("setup",opt,envir=mmTK) #set to envir
+                                      saveSetup(opt) #Save to file
+                                      gWidgets2::svalue(tab4d[2,2]) = fsel
                                     })
-  tab4d[2,2] <- gWidgets::glabel(get("setup",envir=mmTK)$fileReaderRef,container=tab4d)
+  tab4d[2,2] <- gWidgets2::glabel(get("setup",envir=mmTK)$fileReaderRef,container=tab4d)
   
   
-  tab4d[3,1] <- gWidgets::gbutton("Set back to default",container=tab4d,handler = 
+  tab4d[3,1] <- gWidgets2::gbutton("Set back to default",container=tab4d,handler = 
                                     function(h,...) { 
                                       opt = get("setup",envir=mmTK) #get setup
                                       opt$fileReaderRef <- opt$fileReaderEvid <- emptyName #set to default
                                       assign("setup",opt,envir=mmTK) #set to envir
                                       saveSetup(opt) #Save to file
-                                      svalue(tab4d[1,2]) = emptyName #reset in GUI
-                                      svalue(tab4d[2,2]) = emptyName #reset in GUI 
+                                      gWidgets2::svalue(tab4d[1,2]) = emptyName #reset in GUI
+                                      gWidgets2::svalue(tab4d[2,2]) = emptyName #reset in GUI 
                                     })
   
-  gWidgets::visible(mainwin) = TRUE
-
+  gWidgets2::visible(mainwin) = TRUE
+  gWidgets2::size(mainwin) = c(600,500)
 } #End function
 
