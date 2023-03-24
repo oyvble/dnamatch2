@@ -1,3 +1,11 @@
+Updates from v3.0.0 to v3.0.1 (24/03/23)
+ - Bug fixes: 
+ -> An error was triggered by the dnamatch2 function if forensim was not installed. Removing packageVersion("forensim").
+ -> New alleles of references was not added to the frequency database if following was true:
+    If multiple references are stored in a text file and the file was imported as a data.frame. 
+	Solution: Adding unlist to the object.
+
+
 Updates from v2.2.1 to v3.0.0 (03/01/23)
  - Requires EuroForMix v4.0.0
  - GUI now based on gWidgets2

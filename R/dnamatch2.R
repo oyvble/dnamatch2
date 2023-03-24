@@ -77,7 +77,7 @@ dnamatch2 <- function (evidfold, freqfile, reffold = NULL, sameCID = FALSE ,betw
   #CREATE LOG-FILE (saved in session).  User, versions, input for search.
   txt =  "THIS IS A LOG FOR A dnamatch2 RUN"
   txt <- paste0(txt,"\ndnamatch2 version: ",packageVersion("dnamatch2"))
-  txt <- paste0(txt,"\nOther packages: (euroformix_",packageVersion("euroformix"),", forensim_",packageVersion("forensim"),")")
+  txt <- paste0(txt,"\nOther packages: (euroformix_",packageVersion("euroformix"),")")
   txt <- paste0(txt,"\nR-version used: ",R.version.string) #Add R-version used
   txt <- paste0(txt,"\nUser: ",Sys.getenv("USERNAME"))
   txt <- paste0(txt,"\nCreated: ",Sys.time(),"\n")
@@ -204,7 +204,7 @@ dnamatch2 <- function (evidfold, freqfile, reffold = NULL, sameCID = FALSE ,betw
             locind <- which(X[, lind] == loc) #get index of loci
             tmp <- popFreq[[loc]]
             tmpP <- popFreqP[[loc]]
-            av = unique( as.character(X[locind, Aind]) ) #vectorize and get unique alleles 
+            av = unique( as.character(unlist(X[locind, Aind]) )) #vectorize and get unique alleles 
             av = av[!is.na(av) & av!=""] #remove empty alleles
             newA <- av[!av%in%names(popFreq[[loc]])] #get new Alleles
             if (length(newA) > 0) {
