@@ -483,6 +483,10 @@ dnamatch2 <- function (evidfold, freqfile, reffold = NULL, sameCID = FALSE ,betw
     isdup <- duplicated(allSID) #find (redudance+symmetrical) matches already found before
     resMat <- resMat[!isdup,,drop=F] #get only unique matches!
     
+    # Format output of numerical values (round)
+    colsRound = c(6,8:10) #round MAC, LRqual, LRquan and Mx
+    for(colIdx in colsRound) resMat[,colIdx] = round(as.numeric(resMat[,colIdx]),3)
+    
     #5) STORE MATCHES
     write.table( resMat[ resMat[,cn=="refBID"]!="0",,drop=F] , file = paste0(sessionfold,"/stainmatches_", stamp, ".csv"), row.names = FALSE, sep = ";") #store matches not personell:
     write.table( resMat[ resMat[,cn=="refBID"]=="0",,drop=F] , file = paste0(sessionfold,"/refmatches_", stamp, ".csv"), row.names = FALSE, sep = ";") #store matches only personell:

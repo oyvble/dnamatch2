@@ -1,11 +1,11 @@
 Package: dnamatch2
 Type: Package
 Title: A procedure for large scale contamination search
-Version: 3.0.1
-Date: 2023-03-24
+Version: 3.0.2
+Date: 2026-05-11
 Author: Oyvind Bleka
 Maintainer: Oyvind Bleka <oyvble@hotmail.com>
-Description: A fast large scale DNA database search algorithm to search between trace samples (also mixture profiles) and between trace samples and reference samples. The match statistic is first based on matching allele counting (MAC), then likelihood ratios (LRs) based on a qualitative model (forensim), and last LRs based on a  quantitative model. 
+Description: A fast large scale DNA database search algorithm to search between trace samples (also mixture profiles) and between trace samples and reference samples. 
 License: GPL(>=2)
 Depends: euroformix (>= 4.0.0)
 Imports: euroformix

@@ -37,43 +37,6 @@ gui= function(envirfile=NULL) {
  #HELPFUNCTIONS#
  ###############
 
- #This function is written since the encoding in  gWidgets2::gfile is fixed to UTF-8 which doesn't handle special letters
- mygfile <- function(text,type,filter=list(),initf=NULL) { #Possible bug: text ignored when type="selectdir"
-   file <- gWidgets2::gfile(text=text,type=type,filter=filter,initial.filename=initf)
-   Encoding(file ) <- options()$encoding #Set default to local encoder: Makes it possible to use Language-text files in own language
-   return(file)
- }
- 
- #helpfunction to get environment and file name for different data types
- getEnvirFileNames = function(type="EVID") {
-   if(type=="EVID") {
-    envirvar = "evidfolds"
-    fname = evidFile 
-   } else if(type=="REF") {
-    envirvar = "reffolds"
-    fname = refFile 
-   } else if(type=="SIDsel") {
-    envirvar = "SIDsel"
-    fname = SIDselFile 
-   } else if(type=="BIDsel") {
-    envirvar = "BIDsel"
-    fname = BIDselFile 
-   } else if(type=="CIDsel") {
-    envirvar = "CIDsel"
-    fname = CIDselFile 
-   } else if(type=="SIDpat") {
-    envirvar = "SIDpat"
-    fname = SIDpatFile 
-   } else if(type=="BIDpat") {
-    envirvar = "BIDpat"
-    fname = BIDpatFile 
-   } else {
-    envirvar = ""
-    fname = ""
-   }
-   return(c(envirvar,fname ))
- }
-
  #helpfunction to get folder/IDs vector from list (taken from list envir list only)
   getFolds = function(type="EVID") { #get vector of folders from list
    envirvar = getEnvirFileNames(type)[1]
@@ -141,58 +104,37 @@ gui= function(envirfile=NULL) {
    return(opt)
   }
 
- #helpfunction which checks that at value is in interval of [0,1]
- checkProb = function(x,what) {
-  if(x < 0 || x>1) {
-   gWidgets2::gmessage(paste0(what," must be specified in interval [0,1] "),title="Wrong input",icon="error")
-   stop("Wrong user-input")
+  
+  #helpfunction to get environment and file name for different data types
+  getEnvirFileNames = function(type="EVID") {
+    if(type=="EVID") {
+      envirvar = "evidfolds"
+      fname = evidFile 
+    } else if(type=="REF") {
+      envirvar = "reffolds"
+      fname = refFile 
+    } else if(type=="SIDsel") {
+      envirvar = "SIDsel"
+      fname = SIDselFile 
+    } else if(type=="BIDsel") {
+      envirvar = "BIDsel"
+      fname = BIDselFile 
+    } else if(type=="CIDsel") {
+      envirvar = "CIDsel"
+      fname = CIDselFile 
+    } else if(type=="SIDpat") {
+      envirvar = "SIDpat"
+      fname = SIDpatFile 
+    } else if(type=="BIDpat") {
+      envirvar = "BIDpat"
+      fname = BIDpatFile 
+    } else {
+      envirvar = ""
+      fname = ""
+    }
+    return(c(envirvar,fname ))
   }
-  return(x)
- }
- checkPositive = function(x,what,strict=FALSE) {
-  if(x < 0 ) {
-   gWidgets2::gmessage(paste0(what," cannot be a negative number"),title="Wrong input",icon="error")
-   stop("Wrong user-input")
-  }
-  if(strict && x==0) {
-   gWidgets2::gmessage(paste0(what," cannot be zero"),title="Wrong input",icon="error")
-   stop("Wrong user-input")
-  }
-  return(x)
- }
- checkPosInteger = function(x,what,strict=TRUE) {
-  if(x < 1 || round(x)!=x ) {
-   gWidgets2::gmessage(paste0(what," must be a positive integer"),title="Wrong input",icon="error")
-   stop("Wrong user-input")
-  }
-  if(strict && x==0) {
-   gWidgets2::gmessage(paste0(what," cannot be zero"),title="Wrong input",icon="error")
-   stop("Wrong user-input")
-  }
-  return(x)
- }
- val = function(wid) { #helpfunction to get value from widget
-  tmp = as.numeric(gWidgets2::svalue(wid))
-  if(is.na(tmp )) {
-   gWidgets2::gmessage(paste0("Text found where number was expected:\n",gWidgets2::svalue(wid)))
-   return()
-  }
-  return(tmp )
- }
-
- errorMessage = function(msg) {  #Helpfunction to throw error message to user + stop running 
-  gWidgets2::gmessage(msg,title="Error",icon="error")
-  stop(msg)
- }
-
- NullIfEmpty = function(x) {
-   if(length(x)==0) {
-    return(NULL)
-   } else {
-    return(unlist(x)) #input argument in dnamatch2 must be vectors instead of lists
-   }
- }
-
+  
 ############################################################
 #FUNCTION TO RUN ANALYSIS (running with specified settings)#
 ############################################################
@@ -201,215 +143,206 @@ gui= function(envirfile=NULL) {
     #Step 2: Run dnamatch2 with setup
     #Step 3: Future update: Make availble Post-processing
 
-	evidList = get("evidfolds",envir=mmTK) #get evid search folders
-	refList = NullIfEmpty(get("reffolds",envir=mmTK))
-	SIDselList = NullIfEmpty(get("SIDsel",envir=mmTK))
-	BIDselList = NullIfEmpty(get("BIDsel",envir=mmTK))
-	CIDselList = NullIfEmpty(get("CIDsel",envir=mmTK))
-	SIDpatList = NullIfEmpty(get("SIDpat",envir=mmTK))
-	BIDpatList = NullIfEmpty(get("BIDpat",,envir=mmTK))
-	opt = get("setup",envir=mmTK)  #receive settings from envir (preassigned or from file)
-
+    evidList = get("evidfolds",envir=mmTK) #get evid search folders
+    refList = NullIfEmpty(get("reffolds",envir=mmTK))
+    SIDselList = NullIfEmpty(get("SIDsel",envir=mmTK))
+    BIDselList = NullIfEmpty(get("BIDsel",envir=mmTK))
+    CIDselList = NullIfEmpty(get("CIDsel",envir=mmTK))
+    SIDpatList = NullIfEmpty(get("SIDpat",envir=mmTK))
+    BIDpatList = NullIfEmpty(get("BIDpat",,envir=mmTK))
+    opt = get("setup",envir=mmTK)  #receive settings from envir (preassigned or from file)
+    
      #prechecks:
-	if(opt$freqfile==emptyName)  errorMessage("The freqency file has not been specified.\nPlease select one!") 
-  kitUse=opt$kit #get kit
-  if(kitUse==emptyName) kitUse = NULL #Set back to NULL if none specified
+    if(opt$freqfile==emptyName)  errorMessage("The freqency file has not been specified.\nPlease select one!") 
+    kitUse=opt$kit #get kit
+    if(kitUse==emptyName) kitUse = NULL #Set back to NULL if none specified
+    
+    if(opt$ignoreEmptyLoci) {
+      bool = gWidgets2::gconfirm("The option 'Ignore empty markers' should only be used if some of the evidence profiles contains different markers (i.e. run with different kits). Do you want to continue?")
+      if(!bool) return(NULL) #don't search if user not agreeing
+    }
+    
+    importEvidFile <- importRefFile <- NULL
+    if(opt$fileReaderEvid!=emptyName) importEvidFile = opt$fileReaderEvid #set name of file
+    if(opt$fileReaderRef!=emptyName) importRefFile =opt$fileReaderRef #set name of file
+    
+    status <- dnamatch2(
+      evidfold=evidList, 
+      freqfile=opt$freqfile, 
+      reffold=refList, 
+      sameCID=opt$sameCID,
+      betweensamples=opt$betweensamples, 
+      Thist=opt$Thist, 
+      threshMAC=opt$threshMAC, 
+      threshLR=c(opt$threshLRqual,opt$threshLRquan), 
+      threshHeight=opt$threshHeight,
+      threshStutt=opt$threshStutt, 
+      threshMaj=opt$threshMaj, 
+      minLocStain=opt$minLocStain,
+      minLocMaj=opt$minLocMaj, 
+      pC=opt$pC, 
+      lambda=opt$lambda,
+      kit=kitUse,
+      minFreq=opt$minFreq, 
+      searchtime=as.POSIXct(opt$searchtime,format=timestamp), # Sys.time(). Searchtime specified by timestamp!
+      SIDvec=SIDselList,
+      BIDvec=BIDselList,
+      CIDvec=CIDselList,
+      timediff=opt$timediff,
+      IDsep = opt$IDsep,
+      BIDptrn=BIDpatList,
+      SIDptrn=SIDpatList,
+      printHistPlots=opt$printHistPlots,
+      writeScores=opt$writeScores,
+      maxK=c(opt$maxKqual,opt$maxKquan),
+      matchfile=opt$matchfile,
+      sessionfold=opt$sessionfold,
+      searchoption = opt$searchoption,
+      nDone = opt$nDone,
+      ignoreEmptyLoci = opt$ignoreEmptyLoci,
+      searchSubFoldersEvid = opt$searchSubFoldersEvid,
+      searchSubFoldersRef = opt$searchSubFoldersRef,
+      importEvidFile = importEvidFile,
+      importRefFile = importRefFile)
+  
+    if(!status) gWidgets2::gmessage("Search completed:\nNo match candidates were found!")
 
-  if(opt$ignoreEmptyLoci) {
-    bool = gWidgets2::gconfirm("The option 'Ignore empty markers' should only be used if some of the evidence profiles contains different markers (i.e. run with different kits). Do you want to continue?")
-    if(!bool) return() #don't search if user not agreeing
+    #Step 3: Show graph of match candidates
+    if(status && require(igraph) && opt$printGraph) { 
+      tab <- read.table(file=opt$matchfile,header=TRUE,sep=";",stringsAsFactors=FALSE)
+      fra <- tab$refID
+      til <- tab$tarID 
+      rem <- duplicated(cbind(fra,til)) #indices to remove
+      
+      rels <- data.frame(from=fra[!rem],to=til[!rem],weight=rep(1,sum(!rem))) #sqrt(log10(as.numeric(score[!rem]))))
+      gg <- igraph::graph.data.frame(rels,directed=FALSE)
+    
+      dev.new() #avoid overriding existing plots
+      plot(gg,edge.width=igraph::E(gg)$weight,vertex.color="white",vertex.size=10,vertex.label.color="black",vertex.label.cex=0.8)
+      op <- par(no.readonly = TRUE)
+      par(op)
+    }
+  } #end runAnalysis function
+
+  #####################
+  #create environment #
+  #####################
+  pgkPath <- path.package("dnamatch2", quiet = FALSE) # Get package path.
+  .sep <- .Platform$file.sep # Platform dependent path separator. 
+  
+  #STORING INFO IN BOTH Files and Environment (easy user access)
+  #File variable - envir variable:
+  #evidFile (configEvid) - evidfolds
+  #refFile (configRef) - reffolds
+  #SIDselFile (configSIDsel) - SIDsel  #Filter on specific SampleID names. Prefix included.  
+  #BIDselFile (configBIDsel) - BIDsel  #Filter on specific Batch/TA-files. Prefix included. 
+  #CIDselFile (configCIDsel) - CIDsel  #Filter on specific Batch/TA-files. Prefix included. 
+  #SIDpatFile (configSIDpat) - SIDpat  #Pattern before SampleID nr (prefix). Used to recognize types. 
+  #BIDpatFile (configBIDpat) - BIDpat  #Pattern before BatchID nr (prefix). Used to recognize types. 
+  #setupFile (config) - setup
+  
+  evidFile <- paste(pgkPath,"configEvid",sep=.sep) #Setting file for evidence folders
+  refFile <- paste(pgkPath,"configRef",sep=.sep) #Setting file for reference folders
+  SIDselFile <- paste(pgkPath,"configSIDsel",sep=.sep) #Setting file for evidence folders
+  BIDselFile <- paste(pgkPath,"configBIDsel",sep=.sep) #Setting file for reference folders
+  CIDselFile <- paste(pgkPath,"configCIDsel",sep=.sep) #Setting file for reference folders
+  SIDpatFile <- paste(pgkPath,"configSIDpat",sep=.sep) #Setting file for evidence folders
+  BIDpatFile <- paste(pgkPath,"configBIDpat",sep=.sep) #Setting file for reference folders
+  setupFile <- paste(pgkPath,"config",sep=.sep) #Create a file with all settings (not lists)
+  
+  if(is.null(envirfile)) {
+    mmTK = new.env( parent = emptyenv() ) #create new environment object (globalenv?)
+    
+    evidList <- refList <- SIDselList <- BIDselList <- CIDselList <- SIDpatList <- BIDpatList <- list() #This is default
+    if(file.exists(evidFile)) evidList <- scanFileToList(evidFile)
+    if(file.exists(refFile)) refList <- scanFileToList(refFile)
+    if(file.exists(SIDselFile)) SIDselList <- scanFileToList(SIDselFile)
+    if(file.exists(BIDselFile)) BIDselList <- scanFileToList(BIDselFile)
+    if(file.exists(CIDselFile)) CIDselList <- scanFileToList(CIDselFile)
+    if(file.exists(SIDpatFile)) SIDpatList <- scanFileToList(SIDpatFile)
+    if(file.exists(BIDpatFile)) BIDpatList <- scanFileToList(BIDpatFile)
+    
+    #Default set (empty) of folds:
+    assign("evidfolds",evidList,envir=mmTK)
+    assign("reffolds",refList,envir=mmTK)
+    assign("SIDsel",SIDselList,envir=mmTK)
+    assign("BIDsel",BIDselList,envir=mmTK)
+    assign("CIDsel",CIDselList,envir=mmTK)
+    assign("SIDpat",SIDpatList,envir=mmTK)
+    assign("BIDpat",BIDpatList,envir=mmTK)
+    
+    #Default Settings set if setupfile not found:
+    if(file.exists(setupFile)) {
+      opt <- openSetup() #get setup list
+    } else { #SETUP VALUES:
+      opt = list() #list of options
+      opt$freqfile = emptyName #name of freq file (should be full path?). Use file selector 
+      opt$workdir = getwd() #default is work directory
+      
+      #Patterns for recognizing SID,BID,CID: 
+      opt$IDsep= "_" #sepator for SID,BID,CID (Default)
+      
+      #Search type:
+      opt$sameCID = FALSE #Search within same Cases (CIDs)? 
+      opt$betweensamples = TRUE #Search between samples? 
+      
+      #Time windows: 
+      opt$Thist = Inf #The number of days back in search time (using date of files)
+      opt$timediff = Inf #required number of timedifference between match candidates (Can also be NULL by default)
+      opt$searchtime = format(Sys.time(),timestamp) #Set current search time as when opening GUI (a specific string format), can be modified
+      
+      #Search thresholds:
+      opt$threshMAC = 0.75
+      opt$threshLRqual = 10
+      opt$threshLRquan = 100
+      
+      #Prefiltering settings
+      opt$threshHeight = 50 #Detection threshold specified
+      opt$threshStutt = 0.1 #10% stutter rate is threshold
+      opt$threshMaj = 0.6 #P.H. balancy to be included as major allele
+      
+      #Data quality settings:
+      opt$minLocStain = 3
+      opt$minLocMaj = 3
+      
+      #Model settings (dropin/kit):
+      opt$pC = 0.05
+      opt$lambda = 0.01
+      opt$kit = emptyName #Requires kitname (can be NULL also), use euroformix::getKit()
+      
+      #Small option settings:
+      opt$minFreq = 0.001 #minimum frequency used
+      opt$printHistPlots = TRUE
+      opt$writeScores = TRUE
+      opt$maxKqual=4 #max number of contributors under QUAL
+      opt$maxKquan=4 #max number of contributors under QUAN
+      opt$matchfile="matchfile.csv" #file name for storing results
+      opt$sessionfold ="session" #folder name for storing results
+      
+      #GUI option settings:
+      opt$printGraph = TRUE #Should a graph tree of matches in the matchfile be shown?
+      
+      #Search strategy
+      opt$searchoption = 3 #default is searching all methods
+      
+      #Added options v2.2.0:
+      opt$ignoreEmptyLoci = FALSE #Must be true in order to search evid profiles with different markers
+      opt$searchSubFoldersEvid = FALSE #whether to import files in sub-folders
+      opt$searchSubFoldersRef = FALSE #whether to import files in sub-folders
+      opt$nDone = 3 #number of required optimizations for quantitative model (EFM)
+      opt$fileReaderEvid = emptyName
+      opt$fileReaderRef = emptyName
+    } #end if file not found
+    assign("setup",opt,envir=mmTK) #Store setup values 
+  } else {
+    load(envirfile) #loading environment
+    optL = get("setup",envir=mmTK)  #receive settings from envir (preassigned or from file)
+    if( any( !GLOBAL_vars%in%names(optL) ) ) {
+      gWidgets2::gmessage("The project save file was not compatible with this software version!",title="Wrong version",icon="error")
+      return(NULL)
+    }
   }
   
-  importEvidFile <- importRefFile <- NULL
-  if(opt$fileReaderEvid!=emptyName) importEvidFile = opt$fileReaderEvid #set name of file
-  if(opt$fileReaderRef!=emptyName) importRefFile =opt$fileReaderRef #set name of file
-  
-  status <- dnamatch2(
-  	evidfold=evidList, 
-    freqfile=opt$freqfile, 
-  	reffold=refList, 
-  	sameCID=opt$sameCID,
-  	betweensamples=opt$betweensamples, 
-  	Thist=opt$Thist, 
-  	threshMAC=opt$threshMAC, 
-  	threshLR=c(opt$threshLRqual,opt$threshLRquan), 
-  	threshHeight=opt$threshHeight,
-  	threshStutt=opt$threshStutt, 
-  	threshMaj=opt$threshMaj, 
-  	minLocStain=opt$minLocStain,
-  	minLocMaj=opt$minLocMaj, 
-  	pC=opt$pC, 
-  	lambda=opt$lambda,
-  	kit=kitUse,
-  	minFreq=opt$minFreq, 
-  	searchtime=as.POSIXct(opt$searchtime,format=timestamp), # Sys.time(). Searchtime specified by timestamp!
-  	SIDvec=SIDselList,
-  	BIDvec=BIDselList,
-  	CIDvec=CIDselList,
-  	timediff=opt$timediff,
-  	IDsep = opt$IDsep,
-  	BIDptrn=BIDpatList,
-  	SIDptrn=SIDpatList,
-  	printHistPlots=opt$printHistPlots,
-  	writeScores=opt$writeScores,
-  	maxK=c(opt$maxKqual,opt$maxKquan),
-  	matchfile=opt$matchfile,
-  	sessionfold=opt$sessionfold,
-  	searchoption = opt$searchoption,
-  	nDone = opt$nDone,
-  	ignoreEmptyLoci = opt$ignoreEmptyLoci,
-  	searchSubFoldersEvid = opt$searchSubFoldersEvid,
-  	searchSubFoldersRef = opt$searchSubFoldersRef,
-  	importEvidFile = importEvidFile,
-  	importRefFile = importRefFile
-   )
-  
-  if(!status) gWidgets2::gmessage("Search completed:\nNo match candidates were found!")
-
-   #Step 3: Show graph of match candidates
-   if(status && require(igraph) && opt$printGraph) { 
-	tab <- read.table(file=opt$matchfile,header=TRUE,sep=";",stringsAsFactors=FALSE)
-	fra <- tab$refID
-	til <- tab$tarID 
-	rem <- duplicated(cbind(fra,til)) #indices to remove
-	
-	rels <- data.frame(from=fra[!rem],to=til[!rem],weight=rep(1,sum(!rem))) #sqrt(log10(as.numeric(score[!rem]))))
-	gg <- igraph::graph.data.frame(rels,directed=FALSE)
-
-     dev.new() #avoid overriding existing plots
-     plot(gg,edge.width=igraph::E(gg)$weight,vertex.color="white",vertex.size=10,vertex.label.color="black",vertex.label.cex=0.8)
-     op <- par(no.readonly = TRUE)
-     par(op)
-   }
- } #end run function
-
- #####################
- #create environment #
- #####################
- pgkPath <- path.package("dnamatch2", quiet = FALSE) # Get package path.
- .sep <- .Platform$file.sep # Platform dependent path separator. 
-
- #STORING INFO IN BOTH Files and Environment (easy user access)
- #File variable - envir variable:
- #evidFile (configEvid) - evidfolds
- #refFile (configRef) - reffolds
- #SIDselFile (configSIDsel) - SIDsel  #Filter on specific SampleID names. Prefix included.  
- #BIDselFile (configBIDsel) - BIDsel  #Filter on specific Batch/TA-files. Prefix included. 
- #CIDselFile (configCIDsel) - CIDsel  #Filter on specific Batch/TA-files. Prefix included. 
- #SIDpatFile (configSIDpat) - SIDpat  #Pattern before SampleID nr (prefix). Used to recognize types. 
- #BIDpatFile (configBIDpat) - BIDpat  #Pattern before BatchID nr (prefix). Used to recognize types. 
- #setupFile (config) - setup
-
-
- evidFile <- paste(pgkPath,"configEvid",sep=.sep) #Setting file for evidence folders
- refFile <- paste(pgkPath,"configRef",sep=.sep) #Setting file for reference folders
- SIDselFile <- paste(pgkPath,"configSIDsel",sep=.sep) #Setting file for evidence folders
- BIDselFile <- paste(pgkPath,"configBIDsel",sep=.sep) #Setting file for reference folders
- CIDselFile <- paste(pgkPath,"configCIDsel",sep=.sep) #Setting file for reference folders
- SIDpatFile <- paste(pgkPath,"configSIDpat",sep=.sep) #Setting file for evidence folders
- BIDpatFile <- paste(pgkPath,"configBIDpat",sep=.sep) #Setting file for reference folders
- setupFile <- paste(pgkPath,"config",sep=.sep) #Create a file with all settings (not lists)
-
- if(is.null(envirfile)) {
-  mmTK = new.env( parent = emptyenv() ) #create new environment object (globalenv?)
-
-  scanFileToList = function(file) { #helpfunction to convert data from file to list
-    as.list( scan(file=file,what=character(),quiet=TRUE,sep="\n") )  #convert to list 
-  }
-  
-  evidList <- refList <- SIDselList <- BIDselList <- CIDselList <- SIDpatList <- BIDpatList <- list() #This is default
-  if(file.exists(evidFile)) evidList <- scanFileToList(evidFile)
-  if(file.exists(refFile)) refList <- scanFileToList(refFile)
-  if(file.exists(SIDselFile)) SIDselList <- scanFileToList(SIDselFile)
-  if(file.exists(BIDselFile)) BIDselList <- scanFileToList(BIDselFile)
-  if(file.exists(CIDselFile)) CIDselList <- scanFileToList(CIDselFile)
-  if(file.exists(SIDpatFile)) SIDpatList <- scanFileToList(SIDpatFile)
-  if(file.exists(BIDpatFile)) BIDpatList <- scanFileToList(BIDpatFile)
-
-  #Default set (empty) of folds:
-  assign("evidfolds",evidList,envir=mmTK)
-  assign("reffolds",refList,envir=mmTK)
-  assign("SIDsel",SIDselList,envir=mmTK)
-  assign("BIDsel",BIDselList,envir=mmTK)
-  assign("CIDsel",CIDselList,envir=mmTK)
-  assign("SIDpat",SIDpatList,envir=mmTK)
-  assign("BIDpat",BIDpatList,envir=mmTK)
-
-  #Default Settings set if setupfile not found:
-  if(file.exists(setupFile)) {
-   opt <- openSetup() #get setup list
-  } else { #SETUP VALUES:
-   opt = list() #list of options
-   opt$freqfile = emptyName #name of freq file (should be full path?). Use file selector 
-   opt$workdir = getwd() #default is work directory
-
-   #Patterns for recognizing SID,BID,CID: 
-   opt$IDsep= "_" #sepator for SID,BID,CID (Default)
-
-   #Search type:
-   opt$sameCID = FALSE #Search within same Cases (CIDs)? 
-   opt$betweensamples = TRUE #Search between samples? 
-   
-   #Time windows: 
-   opt$Thist = Inf #The number of days back in search time (using date of files)
-   opt$timediff = Inf #required number of timedifference between match candidates (Can also be NULL by default)
-   opt$searchtime = format(Sys.time(),timestamp) #Set current search time as when opening GUI (a specific string format), can be modified
-
-   #Search thresholds:
-   opt$threshMAC = 0.75
-   opt$threshLRqual = 10
-   opt$threshLRquan = 100
-
-   #Prefiltering settings
-   opt$threshHeight = 50 #Detection threshold specified
-   opt$threshStutt = 0.1 #10% stutter rate is threshold
-   opt$threshMaj = 0.6 #P.H. balancy to be included as major allele
-
-   #Data quality settings:
-   opt$minLocStain = 3
-   opt$minLocMaj = 3
-
-   #Model settings (dropin/kit):
-   opt$pC = 0.05
-   opt$lambda = 0.01
-   opt$kit = emptyName #Requires kitname (can be NULL also), use euroformix::getKit()
- 
-   #Small option settings:
-   opt$minFreq = 0.001 #minimum frequency used
-   opt$printHistPlots = TRUE
-   opt$writeScores = TRUE
-   opt$maxKqual=4 #max number of contributors under QUAL
-   opt$maxKquan=4 #max number of contributors under QUAN
-   opt$matchfile="matchfile.csv" #file name for storing results
-   opt$sessionfold ="session" #folder name for storing results
-   
-   #GUI option settings:
-   opt$printGraph = TRUE #Should a graph tree of matches in the matchfile be shown?
-
-   #Search strategy
-   opt$searchoption = 3 #default is searching all methods
-
-   #Added options v2.2.0:
-   opt$ignoreEmptyLoci = FALSE #Must be true in order to search evid profiles with different markers
-   opt$searchSubFoldersEvid = FALSE #whether to import files in sub-folders
-   opt$searchSubFoldersRef = FALSE #whether to import files in sub-folders
-   opt$nDone = 4 #number of required optimizations for quantitative model (EFM)
-   opt$fileReaderEvid = emptyName
-   opt$fileReaderRef = emptyName
-   
-  } #end if file not found
-  assign("setup",opt,envir=mmTK) #Store setup values 
- } else {
-  load(envirfile) #loading environment
-   
-   optL = get("setup",envir=mmTK)  #receive settings from envir (preassigned or from file)
-   if( any( !GLOBAL_vars%in%names(optL) ) ) {
-     gWidgets2::gmessage("The project save file was not compatible with this software version!",title="Wrong version",icon="error")
-     return()
-   }
-   
- }
-
 ###################################################################
 ###########################GUI#####################################
 ###################################################################
@@ -489,108 +422,106 @@ gui= function(envirfile=NULL) {
       gWidgets2::size(tab4c[1,2]) = min(max(nchar(items)),maxlen_box)
       gWidgets2::svalue(tab4c[1,2]) = items[length(items)]
     }
-
   }
 
   #helpfunction for deleting marked folder when clicking button
   f_delFolder = function(h,...) {
-      if(h$action=="EVID") {
-        sel = gWidgets2::svalue(tab2a[1,2])
-        vals = tab2a[1,2][]
-        folds = setdiff(vals,sel)
-        tab2a[1,2][] = folds  #folds #update combolist
-        if(length(folds)==0) {
-          tab2a[1,2][] = longspace #folds #update combolist
-          gWidgets2::svalue(tab2a[1,2]) = longspace 
-          gWidgets2::enabled(tab2a[2,1]) = FALSE
-        } else {
-          gWidgets2::svalue(tab2a[1,2]) = folds[1]
-        }
+    if(h$action=="EVID") {
+      sel = gWidgets2::svalue(tab2a[1,2])
+      vals = tab2a[1,2][]
+      folds = setdiff(vals,sel)
+      tab2a[1,2][] = folds  #folds #update combolist
+      if(length(folds)==0) {
+        tab2a[1,2][] = longspace #folds #update combolist
+        gWidgets2::svalue(tab2a[1,2]) = longspace 
+        gWidgets2::enabled(tab2a[2,1]) = FALSE
+      } else {
+        gWidgets2::svalue(tab2a[1,2]) = folds[1]
       }
-      if(h$action=="REF") {
-        sel = gWidgets2::svalue(tab2b[1,2])
-        vals = tab2b[1,2][]
-        folds = setdiff(vals,sel)
-        tab2b[1,2][] = folds #update combolist
-        if(length(folds)==0) {
-          tab2b[1,2][] = longspace #folds #update combolist
-          gWidgets2::svalue(tab2b[1,2]) = longspace 
-          gWidgets2::enabled(tab2b[2,1]) = FALSE
-        } else {
-          gWidgets2::svalue(tab2b[1,2]) = folds[1]
-        }
+    }
+    if(h$action=="REF") {
+      sel = gWidgets2::svalue(tab2b[1,2])
+      vals = tab2b[1,2][]
+      folds = setdiff(vals,sel)
+      tab2b[1,2][] = folds #update combolist
+      if(length(folds)==0) {
+        tab2b[1,2][] = longspace #folds #update combolist
+        gWidgets2::svalue(tab2b[1,2]) = longspace 
+        gWidgets2::enabled(tab2b[2,1]) = FALSE
+      } else {
+        gWidgets2::svalue(tab2b[1,2]) = folds[1]
       }
-      saveFolds(folds,h$action) #get  h=list(action="EVID")
+    }
+    saveFolds(folds,h$action) #get  h=list(action="EVID")
   } 
 
- f_delID = function(h,...) {
-      if(h$action=="SIDsel") {
-        sel = gWidgets2::svalue(tab2c[1,2])
-        vals = tab2c[1,2][]
-        folds = setdiff(vals,sel)
-        tab2c[1,2][] = folds  #folds #update combolist
-        if(length(folds)==0) {
-          tab2c[1,2][] = longspace #folds #update combolist
-          gWidgets2::svalue(tab2c[1,2]) = longspace 
-          gWidgets2::enabled(tab2c[2,2]) = FALSE
-        } else {
-          gWidgets2::svalue(tab2c[1,2]) = folds[1]
-        }
+  f_delID = function(h,...) {
+    if(h$action=="SIDsel") {
+      sel = gWidgets2::svalue(tab2c[1,2])
+      vals = tab2c[1,2][]
+      folds = setdiff(vals,sel)
+      tab2c[1,2][] = folds  #folds #update combolist
+      if(length(folds)==0) {
+        tab2c[1,2][] = longspace #folds #update combolist
+        gWidgets2::svalue(tab2c[1,2]) = longspace 
+        gWidgets2::enabled(tab2c[2,2]) = FALSE
+      } else {
+        gWidgets2::svalue(tab2c[1,2]) = folds[1]
       }
-      if(h$action=="BIDsel") {
-        sel = gWidgets2::svalue(tab2d[1,2])
-        vals = tab2d[1,2][]
-        folds = setdiff(vals,sel)
-        tab2d[1,2][] = folds #update combolist
-        if(length(folds)==0) {
-          tab2d[1,2][] = longspace #folds #update combolist
-          gWidgets2::svalue(tab2d[1,2]) = longspace 
-          gWidgets2::enabled(tab2d[2,2]) = FALSE
-        } else {
-          gWidgets2::svalue(tab2d[1,2]) = folds[1]
-        }
+    }
+    if(h$action=="BIDsel") {
+      sel = gWidgets2::svalue(tab2d[1,2])
+      vals = tab2d[1,2][]
+      folds = setdiff(vals,sel)
+      tab2d[1,2][] = folds #update combolist
+      if(length(folds)==0) {
+        tab2d[1,2][] = longspace #folds #update combolist
+        gWidgets2::svalue(tab2d[1,2]) = longspace 
+        gWidgets2::enabled(tab2d[2,2]) = FALSE
+      } else {
+        gWidgets2::svalue(tab2d[1,2]) = folds[1]
       }
-      if(h$action=="CIDsel") {
-        sel = gWidgets2::svalue(tab2f[1,2])
-        vals = tab2f[1,2][]
-        folds = setdiff(vals,sel)
-        tab2f[1,2][] = folds #update combolist
-        if(length(folds)==0) {
-          tab2f[1,2][] = longspace #folds #update combolist
-          gWidgets2::svalue(tab2f[1,2]) = longspace 
-          gWidgets2::enabled(tab2f[2,2]) = FALSE
-        } else {
-          gWidgets2::svalue(tab2f[1,2]) = folds[1]
-        }
+    }
+    if(h$action=="CIDsel") {
+      sel = gWidgets2::svalue(tab2f[1,2])
+      vals = tab2f[1,2][]
+      folds = setdiff(vals,sel)
+      tab2f[1,2][] = folds #update combolist
+      if(length(folds)==0) {
+        tab2f[1,2][] = longspace #folds #update combolist
+        gWidgets2::svalue(tab2f[1,2]) = longspace 
+        gWidgets2::enabled(tab2f[2,2]) = FALSE
+      } else {
+        gWidgets2::svalue(tab2f[1,2]) = folds[1]
       }
-      if(h$action=="SIDpat") {
-        sel = gWidgets2::svalue(tab4b[1,2])
-        vals = tab4b[1,2][]
-        folds = setdiff(vals,sel)
-        tab4b[1,2][] = folds  #folds #update combolist
-        if(length(folds)==0) {
-          tab4b[1,2][] = longspace #folds #update combolist
-          gWidgets2::svalue(tab4b[1,2]) = longspace 
-          gWidgets2::enabled(tab4b[2,2]) = FALSE
-        } else {
-          gWidgets2::svalue(tab4b[1,2]) = folds[1]
-        }
+    }
+    if(h$action=="SIDpat") {
+      sel = gWidgets2::svalue(tab4b[1,2])
+      vals = tab4b[1,2][]
+      folds = setdiff(vals,sel)
+      tab4b[1,2][] = folds  #folds #update combolist
+      if(length(folds)==0) {
+        tab4b[1,2][] = longspace #folds #update combolist
+        gWidgets2::svalue(tab4b[1,2]) = longspace 
+        gWidgets2::enabled(tab4b[2,2]) = FALSE
+      } else {
+        gWidgets2::svalue(tab4b[1,2]) = folds[1]
       }
-      if(h$action=="BIDpat") {
-        sel = gWidgets2::svalue(tab4c[1,2])
-        vals = tab4c[1,2][]
-        folds = setdiff(vals,sel)
-        tab4c[1,2][] = folds #update combolist
-        if(length(folds)==0) {
-          tab4c[1,2][] = longspace #folds #update combolist
-          gWidgets2::svalue(tab4c[1,2]) = longspace 
-          gWidgets2::enabled(tab4c[2,2]) = FALSE
-        } else {
-          gWidgets2::svalue(tab4c[1,2]) = folds[1]
-        }
+    }
+    if(h$action=="BIDpat") {
+      sel = gWidgets2::svalue(tab4c[1,2])
+      vals = tab4c[1,2][]
+      folds = setdiff(vals,sel)
+      tab4c[1,2][] = folds #update combolist
+      if(length(folds)==0) {
+        tab4c[1,2][] = longspace #folds #update combolist
+        gWidgets2::svalue(tab4c[1,2]) = longspace 
+        gWidgets2::enabled(tab4c[2,2]) = FALSE
+      } else {
+        gWidgets2::svalue(tab4c[1,2]) = folds[1]
       }
-
-      saveFolds(folds,h$action) #get  h=list(action="EVID")
+    }
+    saveFolds(folds,h$action) #get  h=list(action="EVID")
   } 
 
 
@@ -598,25 +529,23 @@ gui= function(envirfile=NULL) {
 ##################################################################################################
 ########### Program starts #######################################################################
 ##################################################################################################
-
- sysdat = Sys.info() #get user info: Will be added to log
- #sysdat[['user']] #USER INFO
-
- #change working directory to the one stored in mmTK-environment
- wd=get("setup",envir=mmTK)$workdir #assign working directory to mmTK-environment
- if(!is.null(wd)) {
+  sysdat = Sys.info() #get user info: Will be added to log
+  #sysdat[['user']] #USER INFO
+  
+  #change working directory to the one stored in mmTK-environment
+  wd=get("setup",envir=mmTK)$workdir #assign working directory to mmTK-environment
+  if(!is.null(wd)) {
    tryCatch( { setwd(wd) }, error=function(e) print("Folder not found. Using existing") )
- }
- 
- #Main window:
- mainwin <- gWidgets2::gwindow(softname, visible=FALSE)
- nb = gWidgets2::gnotebook(container=mainwin)
- tabanalyse = gWidgets2::ggroup(expand=TRUE,spacing=spc,container=nb,label="Analyse") #tab1: (select project and file storage)
- tabdata = gWidgets2::ggroup(expand=TRUE,spacing=spc,container=nb,label="Data setup") #tab2: (select what data to search)
- tabsearch = gWidgets2::ggroup(expand=TRUE,spacing=spc,container=nb,label="Search setup") #tab3: (select prefilter thresholds and model settings)
- tabpattern = gWidgets2::ggroup(expand=TRUE,spacing=spc,container=nb,label="Other setup") #tab4: (User specified pattern setup)
-
- gWidgets2::svalue(nb) <- 1 #initial start in first tab
+  }
+  
+  #Main window:
+  mainwin <- gWidgets2::gwindow(softname, visible=FALSE)
+  nb = gWidgets2::gnotebook(container=mainwin)
+  tabanalyse = gWidgets2::ggroup(spacing=spc,container=nb,label="Analyse") #tab1: (select project and file storage)
+  tabdata = gWidgets2::ggroup(spacing=spc,container=nb,label="Data setup") #tab2: (select what data to search)
+  tabsearch = gWidgets2::ggroup(spacing=spc,container=nb,label="Search setup") #tab3: (select prefilter thresholds and model settings)
+  tabpattern = gWidgets2::ggroup(spacing=spc,container=nb,label="Other setup") #tab4: (User specified pattern setup)
+  gWidgets2::svalue(nb) <- 1 #initial start in first tab
 
 
 #####################################################

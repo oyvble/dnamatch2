@@ -1,4 +1,17 @@
-Updates from v3.0.0 to v3.0.1 (24/03/23)
+Suggestions:
+- Possible bug: When importing data using TableReader: Use tryCatch to avoid errors. Read file only if no error.
+
+
+Changes v3.0.2 (24/03/23)
+=============================================
+ - Fixed crash when running GUI in R v4.6.x
+ -> Updated gui function (L513-L517): expand=TRUE was removed.
+ - Updated output values of MAC,LR and Mx (now rounded with three decimals): 
+ -> Updated dnamatch2 function L487-L488.
+ - Some helpfunctions were moved to separate helpfunction R-file.
+
+Changes v3.0.1 (24/03/23)
+=============================================
  - Bug fixes: 
  -> An error was triggered by the dnamatch2 function if forensim was not installed. Removing packageVersion("forensim").
  -> New alleles of references was not added to the frequency database if following was true:
@@ -6,16 +19,19 @@ Updates from v3.0.0 to v3.0.1 (24/03/23)
 	Solution: Adding unlist to the object.
 
 
-Updates from v2.2.1 to v3.0.0 (03/01/23)
+Changes v3.0.0 (03/01/23)
+=============================================
  - Requires EuroForMix v4.0.0
  - GUI now based on gWidgets2
  - LR values now given in bans (log10 scale)
 
-Updates from v2.2.0 to v2.2.1 (22/11/20)
+Changes v2.2.1 (22/11/20)
+=============================================
  - An issue was fixed concerning locus lookup when loading evidence data:
     - dnamatch2-L338: A bug occured if one locus name was a subset of another (for instance DYS389I vs DYS389II). The lookup function "grep" is now replaced by "match".
 
-Updates from v2.2.0 to v2.2.0 (31/05/20)
+Changes v2.2.0 (31/05/20)
+=============================================
  - The function for importing evidence and reference data can now be selected by the user (under 'Other setup' panel).
  - Multi-kit compatibility:
 	 - The reference files don't need to contain all markers used in the evidence files.
@@ -25,8 +41,8 @@ Updates from v2.2.0 to v2.2.0 (31/05/20)
  - Files within subfolders of selected folders can now be included to the search (optional).
  - The number of optimization for the quantitative model can now be selected.
  
-Updates from v2.0.0 to v2.1.0
-
+Changes v2.1.0
+=============================================
  - Model Search option provided: Only MAC or MAC+Qual also possible to search.
  - Ignore files (also folders) giving errors: Printing name of file if failed to import! Consequence: Data with wrong format may not be detected!
  - If a file contains an error (causing importData to fail), this is recognized and a stop-message is given with info about that file. 
@@ -37,14 +53,15 @@ Updates from v2.0.0 to v2.1.0
  - Fixed bugs:
 	- SIDptrn was not used if SIDvec or CID was not provided.
 
-Update v1.4 to v2.0:
+Changes v2.0
+=============================================
  - A userfriendly GUI wrapper has been added. Open with gui().
  - The dnamatch2 function has been updated:
 	-- Added functionalities to write intermediate LR results (LRqualResults,LRquanResults).
 	-- Each run produce a log (searchLog) containing settings for the run.
 
-Update v1.3 to v1.4:
-
+Changes v1.4:
+=============================================
 Changes:
 - More details in "Match
 - The user can now write out the accepted scores from the search for each steps (MAC,qualLR,quanLR).
@@ -59,7 +76,4 @@ Minor changes:
 
 Made more robust:
 - AMEL not longer required in data
-
-#Potential bugs:
--When importing data using TableReader: Use tryCatch to avoid errors. Read file only if no error.
 
